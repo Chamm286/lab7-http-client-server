@@ -826,7 +826,7 @@ public class HttpServerCore {
                 return errorResponse(400, "Bad Request", "Thiếu tham số url.");
             }
             URI target = URI.create(externalUrl);
-            validateBrowserTarget(target);
+            validatePublicUrlForInspection(target);
             UrlInspector.Analysis result = UrlInspector.analyze(externalUrl);
             StringBuilder json = new StringBuilder("{\"protocol\":\"")
                     .append(jsonEscape(result.protocol)).append("\",\"host\":\"")
@@ -865,6 +865,30 @@ public class HttpServerCore {
             }
         }
         return null;
+    }
+
+    private void validatePublicUrlForInspection(URI target) throws IOException {
+        if (target == null || !("http".equalsIgnoreCase(target.getScheme())
+                || "https".equalsIgnoreCase(target.getScheme()))
+                || target.getHost() == null || target.getRawUserInfo() != null
+                || target.getRawFragment() != null) {
+            throw new IllegalArgumentException(
+                    "Chỉ chấp nhận URL http(s) có hostname, không có user info/fragment.");
+        }
+        int port = target.getPort();
+        if (port == 0 || port > 65535) {
+            throw new IllegalArgumentException("Port phải nằm trong khoảng 1–65535.");
+        }
+        String host = target.getHost().toLowerCase(Locale.ROOT);
+        if (host.endsWith(".localhost") || host.endsWith(".local")
+                || host.endsWith(".internal") || "localhost".equals(host)) {
+            throw new SecurityException("Không cho phép tra host nội bộ.");
+        }
+        for (InetAddress address : InetAddress.getAllByName(host)) {
+            if (!isPublicAddress(address)) {
+                throw new SecurityException("Không cho phép tra địa chỉ IP nội bộ hoặc đặc biệt.");
+            }
+        }
     }
 
     private void validateBrowserTarget(URI target) throws IOException {
