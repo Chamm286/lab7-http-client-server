@@ -2,6 +2,7 @@ package ui;
 
 import core.HttpClientCore;
 import core.HttpServerCore;
+import core.UrlInspector;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -110,6 +111,7 @@ public class MainView {
     private Button startButton;
     private Button stopButton;
     private Button sendButton;
+    private Button inspectUrlButton;
     private Button chooseUploadButton;
     private Button uploadButton;
     private Button saveResponseButton;
@@ -137,6 +139,14 @@ public class MainView {
     private TextArea bodyArea;
     private TextArea requestBodyArea;
     private Label htmlAnalysisLabel;
+    private Label urlInspectorStatus;
+    private Label urlProtocolValue;
+    private Label urlHostValue;
+    private Label urlPortValue;
+    private Label urlDefaultPortValue;
+    private Label urlEffectivePortValue;
+    private Label urlFileValue;
+    private Label urlIpValue;
     private WebView webView;
     private String lastClientLoadedUrl;
     private boolean interceptingBrowserNavigation;
@@ -659,6 +669,13 @@ public class MainView {
         urlField.setTooltip(new javafx.scene.control.Tooltip(
                 "Nhập URL đầy đủ của tài nguyên cần gửi request HTTP."));
         urlField.setOnAction(event -> sendRequest());
+        inspectUrlButton = secondaryButton("Phân tích URL");
+        inspectUrlButton.setGraphic(svgIcon(
+                "M10 3H3v7h7z M21 14h-7v7h7z M14 3h7v7h-7z M3 14h7v7H3z",
+                14, "#2563eb"));
+        inspectUrlButton.setPrefHeight(48);
+        inspectUrlButton.setMinWidth(145);
+        inspectUrlButton.setOnAction(event -> inspectUrl());
         sendButton = primaryButton("Gửi request");
         sendButton.setGraphic(svgIcon(
                 "M2 3 22 12 2 21l3-8 11-1-11-1z",
@@ -667,8 +684,35 @@ public class MainView {
         sendButton.setMinWidth(150);
         sendButton.setOnAction(event -> sendRequest());
         HBox.setHgrow(urlField, Priority.ALWAYS);
-        HBox urlRow = new HBox(10, urlField, sendButton);
+        HBox urlRow = new HBox(10, urlField, inspectUrlButton, sendButton);
         urlRow.setAlignment(Pos.CENTER_LEFT);
+        urlProtocolValue = urlInfoValue();
+        urlHostValue = urlInfoValue();
+        urlPortValue = urlInfoValue();
+        urlDefaultPortValue = urlInfoValue();
+        urlEffectivePortValue = urlInfoValue();
+        urlFileValue = urlInfoValue();
+        urlIpValue = urlInfoValue();
+        urlInspectorStatus = new Label("Chưa phân tích URL");
+        urlInspectorStatus.setStyle("-fx-text-fill: #64748b; -fx-font-size: 11px;");
+        HBox urlInfoHeading = new HBox(8,
+                svgIcon("M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 5v5l4 2",
+                        16, "#0284c7"),
+                sectionTitle("THÔNG TIN URL & ĐỊA CHỈ IP"), urlInspectorStatus);
+        urlInfoHeading.setAlignment(Pos.CENTER_LEFT);
+        HBox urlFieldsRow = new HBox(10,
+                urlInfoItem("PROTOCOL", urlProtocolValue),
+                urlInfoItem("HOSTNAME", urlHostValue),
+                urlInfoItem("PORT TRONG URL", urlPortValue),
+                urlInfoItem("PORT MẶC ĐỊNH", urlDefaultPortValue),
+                urlInfoItem("PORT KẾT NỐI", urlEffectivePortValue));
+        HBox urlResourceRow = new HBox(10,
+                urlInfoItem("FILE / PATH", urlFileValue),
+                urlInfoItem("HOSTNAME → IP (InetAddress)", urlIpValue));
+        VBox urlAnalysisCard = new VBox(9, urlInfoHeading, urlFieldsRow, urlResourceRow);
+        urlAnalysisCard.setPadding(new Insets(12));
+        urlAnalysisCard.setStyle("-fx-background-color: #f8fafc; -fx-background-radius: 10; "
+                + "-fx-border-color: #dbe5f0; -fx-border-radius: 10;");
         HBox requestTitle = new HBox(9,
                 svgIcon("M3 4h18v13H3z M8 21h8v-2H8z M7 8h10v2H7z M7 12h7v2H7z",
                         16, "#2563eb"),
@@ -677,7 +721,7 @@ public class MainView {
         VBox requestBar = new VBox(12,
                 requestTitle, fieldCaption("PHƯƠNG THỨC"), methodSelector,
                 new javafx.scene.control.Separator(),
-                fieldCaption("URL ĐÍCH"), urlRow);
+                fieldCaption("URL ĐÍCH"), urlRow, urlAnalysisCard);
         requestBar.setPadding(new Insets(19));
         requestBar.setStyle(CARD_STYLE);
         writeTokenField = new PasswordField();
@@ -1166,6 +1210,56 @@ public class MainView {
             rootField.setText(selected.getAbsolutePath());
             refreshEndpoints();
         }
+    }
+
+    private void inspectUrl() {
+        String address = urlField == null ? "" : urlField.getText().trim();
+        if (address.isEmpty()) {
+            urlInspectorStatus.setText("Nhập URL trước");
+            urlInspectorStatus.setStyle("-fx-text-fill: #b45309; -fx-font-size: 11px;");
+            return;
+        }
+
+        inspectUrlButton.setDisable(true);
+        urlInspectorStatus.setText("Đang phân tích URL và tra DNS…");
+        urlInspectorStatus.setStyle("-fx-text-fill: #0369a1; -fx-font-size: 11px;");
+        Task<UrlInspector.Analysis> task = new Task<UrlInspector.Analysis>() {
+            @Override
+            protected UrlInspector.Analysis call() throws Exception {
+                return UrlInspector.analyze(address);
+            }
+        };
+        task.setOnSucceeded(event -> {
+            UrlInspector.Analysis result = task.getValue();
+            urlProtocolValue.setText(result.protocol);
+            urlHostValue.setText(result.host);
+            urlPortValue.setText(result.port < 0 ? "-1 · không ghi trong URL"
+                    : Integer.toString(result.port));
+            urlDefaultPortValue.setText(result.defaultPort < 0 ? "Không xác định"
+                    : Integer.toString(result.defaultPort));
+            urlEffectivePortValue.setText(result.effectivePort < 0 ? "Không xác định"
+                    : Integer.toString(result.effectivePort));
+            urlFileValue.setText(result.file.isEmpty() ? "(rỗng)" : result.file);
+            urlIpValue.setText(result.addresses.isEmpty()
+                    ? result.dnsError : String.join("\n", result.addresses));
+            urlInspectorStatus.setText(result.dnsError == null
+                    ? "Đã phân giải " + result.addresses.size() + " địa chỉ"
+                    : result.dnsError);
+            urlInspectorStatus.setStyle(result.dnsError == null
+                    ? "-fx-text-fill: #047857; -fx-font-size: 11px;"
+                    : "-fx-text-fill: #b45309; -fx-font-size: 11px;");
+            inspectUrlButton.setDisable(false);
+        });
+        task.setOnFailed(event -> {
+            Throwable error = task.getException();
+            urlInspectorStatus.setText(error == null ? "URL không hợp lệ"
+                    : "URL không hợp lệ: " + error.getMessage());
+            urlInspectorStatus.setStyle("-fx-text-fill: #b91c1c; -fx-font-size: 11px;");
+            inspectUrlButton.setDisable(false);
+        });
+        Thread thread = new Thread(task, "url-inspector-dns");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private void sendRequest() {
@@ -2230,6 +2324,28 @@ public class MainView {
         Label description = new Label(subtitle);
         description.setStyle("-fx-text-fill: #64748b; -fx-font-size: 12px;");
         return new VBox(6, heading, description);
+    }
+
+    private Label urlInfoValue() {
+        Label value = new Label("—");
+        value.setWrapText(true);
+        value.setMinHeight(20);
+        value.setStyle("-fx-text-fill: #172033; -fx-font-family: 'Consolas'; "
+                + "-fx-font-size: 11px; -fx-font-weight: bold;");
+        return value;
+    }
+
+    private VBox urlInfoItem(String title, Label value) {
+        Label caption = new Label(title);
+        caption.setStyle("-fx-text-fill: #64748b; -fx-font-size: 9px; "
+                + "-fx-font-weight: bold;");
+        VBox item = new VBox(4, caption, value);
+        item.setPadding(new Insets(7, 8, 7, 8));
+        item.setStyle("-fx-background-color: white; -fx-background-radius: 7; "
+                + "-fx-border-color: #e2e8f0; -fx-border-radius: 7;");
+        item.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(item, Priority.ALWAYS);
+        return item;
     }
 
     private Label sectionTitle(String text) {

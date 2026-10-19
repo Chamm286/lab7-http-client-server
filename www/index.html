@@ -152,7 +152,7 @@
         .request-card { padding: 17px; }
         .card-title { margin: 0 0 13px; color: #d9dfeb; font-size: 12px; font-weight: 700; }
 
-        .request-row { display: grid; grid-template-columns: 112px minmax(120px, 1fr) auto; gap: 9px; }
+        .request-row { display: grid; grid-template-columns: 112px minmax(120px, 1fr) auto auto; gap: 9px; }
 
         select, input {
             width: 100%;
@@ -405,6 +405,11 @@
         .analysis-card { padding: 11px 12px; border: 1px solid #2b4356; border-radius: 8px; background: #102232; }
         .analysis-card small { display: block; color: #8fa2b6; font-size: 9px; font-weight: 700; letter-spacing: .05em; }
         .analysis-card strong { display: block; margin-top: 5px; color: #7bd2de; font: 700 14px Consolas, monospace; }
+        .url-analysis { margin-top: 12px; padding: 13px; border: 1px solid #293d55; border-radius: 9px; background: #0d1929; }
+        .url-analysis-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: #dce6f3; font-size: 11px; font-weight: 700; }
+        .url-analysis-heading .url-analysis-status { margin-left: auto; color: #8fa2b6; font-size: 10px; font-weight: 500; }
+        .url-analysis .analysis-grid { margin-bottom: 0; }
+        .url-analysis .analysis-card strong { overflow-wrap: anywhere; white-space: pre-wrap; font-size: 12px; }
         .request-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 17px; padding: 12px; border: 1px solid #263b50; border-radius: 10px; background: linear-gradient(110deg, #102131, #111b2a); }
         .flow-step { display: grid; grid-template-columns: 27px minmax(0, 1fr); align-items: start; gap: 3px 10px; min-width: 0; }
         .flow-number { grid-row: 1 / span 2; display: grid; width: 26px; height: 26px; place-items: center; border: 1px solid #276074; border-radius: 7px; background: #123142; color: #83d7e1; font: 700 11px Consolas, monospace; }
@@ -537,8 +542,23 @@
                         </select>
                         <input id="path" type="text" value="/__files" aria-label="URL tài nguyên"
                                placeholder="https://host/path">
+                        <button id="inspect-url" type="button">⌕ Phân tích URL & IP</button>
                         <button id="send" class="primary" type="button">Gửi request</button>
                     </div>
+                    <section class="url-analysis" aria-label="Thông tin URL và IP">
+                        <div class="url-analysis-heading"><span>◎</span> PHÂN TÍCH URL & ĐỊA CHỈ IP
+                            <span class="url-analysis-status" id="url-analysis-status" role="status">Nhập URL rồi bấm Phân tích</span>
+                        </div>
+                        <div class="analysis-grid">
+                            <div class="analysis-card"><small>PROTOCOL</small><strong id="url-protocol">—</strong></div>
+                            <div class="analysis-card"><small>HOSTNAME</small><strong id="url-host">—</strong></div>
+                            <div class="analysis-card"><small>PORT TRONG URL</small><strong id="url-port">—</strong></div>
+                            <div class="analysis-card"><small>PORT MẶC ĐỊNH</small><strong id="url-default-port">—</strong></div>
+                            <div class="analysis-card"><small>PORT KẾT NỐI</small><strong id="url-effective-port">—</strong></div>
+                            <div class="analysis-card"><small>FILE / PATH</small><strong id="url-file">—</strong></div>
+                            <div class="analysis-card"><small>IP TỪ InetAddress</small><strong id="url-addresses">—</strong></div>
+                        </div>
+                    </section>
                     <div class="quick-paths">
                         <span>Đường dẫn nhanh:</span>
                         <button class="path-chip" data-path="/__files">Danh sách tệp · GET</button>
@@ -615,6 +635,8 @@
     const postBodyCard = document.getElementById("post-body-card");
     const postBodyInput = document.getElementById("post-body");
     const sendButton = document.getElementById("send");
+    const inspectUrlButton = document.getElementById("inspect-url");
+    const urlAnalysisStatus = document.getElementById("url-analysis-status");
     const downloadButton = document.getElementById("download");
     const statusBadge = document.getElementById("status");
     const durationLabel = document.getElementById("duration");
@@ -806,6 +828,7 @@
         renderHistory();
     });
     sendButton.addEventListener("click", () => sendRequest());
+    inspectUrlButton.addEventListener("click", inspectUrl);
     methodSelect.addEventListener("change", () => {
         const hasBody = methodSelect.value === "POST";
         postBodyCard.hidden = !hasBody;
@@ -827,6 +850,60 @@
     downloadButton.addEventListener("click", downloadResponse);
     uploadButton.addEventListener("click", uploadFile);
     document.getElementById("refresh-files").addEventListener("click", refreshFiles);
+    async function inspectUrl() {
+        let target;
+        try {
+            target = new URL(pathInput.value.trim());
+            if (target.protocol !== "http:" && target.protocol !== "https:") {
+                throw new Error("Chỉ hỗ trợ URL HTTP hoặc HTTPS.");
+            }
+            if (!target.hostname) throw new Error("URL phải có hostname.");
+            target.hash = "";
+        } catch (error) {
+            urlAnalysisStatus.textContent = "Nhập URL đầy đủ, ví dụ https://vku.udn.vn/";
+            urlAnalysisStatus.style.color = "#ff9a9e";
+            return;
+        }
+
+        inspectUrlButton.disabled = true;
+        inspectUrlButton.textContent = "Đang tra IP…";
+        urlAnalysisStatus.textContent = "Java server đang phân tích URL và tra DNS…";
+        urlAnalysisStatus.style.color = "#7bd2de";
+        try {
+            const endpoint = new URL("/__url-info", serverOrigin);
+            endpoint.searchParams.set("url", target.href);
+            const response = await fetch(endpoint, { cache: "no-store" });
+            const responseText = await response.text();
+            let result;
+            try {
+                result = JSON.parse(responseText);
+            } catch (error) {
+                throw new Error(responseText || ("HTTP " + response.status));
+            }
+            if (!response.ok) throw new Error(result.message || ("HTTP " + response.status));
+
+            document.getElementById("url-protocol").textContent = result.protocol;
+            document.getElementById("url-host").textContent = result.host;
+            document.getElementById("url-port").textContent = result.port < 0
+                ? "-1 · không ghi trong URL" : String(result.port);
+            document.getElementById("url-default-port").textContent = result.defaultPort < 0
+                ? "Không xác định" : String(result.defaultPort);
+            document.getElementById("url-effective-port").textContent = result.effectivePort < 0
+                ? "Không xác định" : String(result.effectivePort);
+            document.getElementById("url-file").textContent = result.file || "(rỗng)";
+            document.getElementById("url-addresses").textContent = result.addresses.length
+                ? result.addresses.join("\n") : "Không tìm thấy địa chỉ IP";
+            urlAnalysisStatus.textContent = "Đã tra được " + result.addresses.length + " địa chỉ IP";
+            urlAnalysisStatus.style.color = "#65d6a3";
+        } catch (error) {
+            urlAnalysisStatus.textContent = "Tra IP thất bại: " + error.message;
+            urlAnalysisStatus.style.color = "#ff9a9e";
+        } finally {
+            inspectUrlButton.disabled = false;
+            inspectUrlButton.textContent = "⌕ Phân tích URL & IP";
+        }
+    }
+
     async function sendRequest() {
         const method = methodSelect.value;
         const enteredPath = pathInput.value.trim();

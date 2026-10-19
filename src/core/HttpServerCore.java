@@ -367,6 +367,8 @@ public class HttpServerCore {
                     try {
                         response = "/__browse".equals(path)
                                 ? fetchExternalResource(requestTarget, method, null, null, remoteAddress)
+                                : "/__url-info".equals(path)
+                                        ? inspectUrl(requestTarget, remoteAddress)
                                 : "/__health".equals(path) ? healthResponse()
                                 : "/__audit".equals(path) ? auditResponse()
                                         : findFile(path);
@@ -645,6 +647,9 @@ public class HttpServerCore {
         if ("/__browse".equals(path)) {
             return "GET, HEAD, POST, OPTIONS";
         }
+        if ("/__url-info".equals(path)) {
+            return "GET, HEAD, OPTIONS";
+        }
         if ("/__upload".equals(path)) {
             return "POST, OPTIONS";
         }
@@ -809,6 +814,44 @@ public class HttpServerCore {
         return errorResponse(502, "Bad Gateway", "Không thể hoàn tất chuyển hướng.");
     }
 
+    private FileResponse inspectUrl(String requestTarget, String clientAddress) {
+        if (!allowBrowserRequest(clientAddress)) {
+            return errorResponse(429, "Too Many Requests",
+                    "Đã đạt giới hạn 30 request phân tích mỗi phút từ địa chỉ này.");
+        }
+        try {
+            String rawQuery = URI.create(requestTarget).getRawQuery();
+            String externalUrl = queryParameter(rawQuery, "url");
+            if (externalUrl == null || externalUrl.isBlank()) {
+                return errorResponse(400, "Bad Request", "Thiếu tham số url.");
+            }
+            URI target = URI.create(externalUrl);
+            validateBrowserTarget(target);
+            UrlInspector.Analysis result = UrlInspector.analyze(externalUrl);
+            StringBuilder json = new StringBuilder("{\"protocol\":\"")
+                    .append(jsonEscape(result.protocol)).append("\",\"host\":\"")
+                    .append(jsonEscape(result.host)).append("\",\"port\":")
+                    .append(result.port).append(",\"defaultPort\":")
+                    .append(result.defaultPort).append(",\"effectivePort\":")
+                    .append(result.effectivePort).append(",\"file\":\"")
+                    .append(jsonEscape(result.file)).append("\",\"addresses\":[");
+            for (int i = 0; i < result.addresses.size(); i++) {
+                if (i > 0) json.append(',');
+                json.append('"').append(jsonEscape(result.addresses.get(i))).append('"');
+            }
+            json.append("]}");
+            return new FileResponse(200, "OK", "application/json; charset=UTF-8",
+                    json.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (IllegalArgumentException e) {
+            return errorResponse(400, "Bad Request", "URL đích không hợp lệ.");
+        } catch (SecurityException e) {
+            return errorResponse(403, "Forbidden", e.getMessage());
+        } catch (IOException e) {
+            return errorResponse(502, "Bad Gateway",
+                    "Không phân giải được host đích: " + e.getMessage());
+        }
+    }
+
     private String queryParameter(String rawQuery, String name) {
         if (rawQuery == null) {
             return null;
@@ -941,7 +984,7 @@ public class HttpServerCore {
         String json = "{\"status\":\"ok\",\"service\":\"Lab7 HTTP Server\","
                 + "\"uptimeSeconds\":" + uptimeSeconds
                 + ",\"storage\":\"filesystem\","
-                + "\"services\":[\"static-files\",\"file-transfer\",\"http-audit\"]}";
+                + "\"services\":[\"static-files\",\"file-transfer\",\"http-audit\",\"url-inspector\"]}";
         return new FileResponse(200, "OK", "application/json; charset=UTF-8",
                 json.getBytes(StandardCharsets.UTF_8));
     }

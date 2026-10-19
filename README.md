@@ -7,12 +7,12 @@ Java HTTP server and browser client for demonstrating HTTP over TCP/IP, file tra
 The server and client are separate programs with focused interfaces:
 
 - Start `ServerApp` (VS Code: **Run Server UI**) on the host computer. Configure the TCP port and shared document root, then start the server. Share the displayed LAN URL with the client; share the write token only if the client needs protected methods.
-- Start `ClientApp` (VS Code: **Run Client UI**) on the client computer. Enter the server's LAN URL in the HTTP Client tab and send requests. The client has no local server controls and does not start a server.
+- Start `ClientApp` (VS Code: **Run Client UI**) on the client computer. Enter a URL in the HTTP Client tab, use **Phân tích URL** to inspect its protocol, hostname, explicit/default/effective port, file/path, and resolved IP addresses, then send GET, POST, or HEAD requests. The client has no local server controls and does not start a server.
 - For a one-computer demonstration, `App` (VS Code: **Run Combined Demo**) retains the combined interface.
 
 For a two-computer demo, both computers must be on the same LAN/Wi-Fi and the server computer's firewall must allow the selected TCP port. Do not enter `localhost` in the client on a different computer; use the server's displayed LAN URL.
 
-The browser client is served at `/` from the server. Its **HTTP Request** view supports the assignment's three methods. Enter a full URL (or a path on the current host); the browser page is restricted to the server's own origin by browser CORS rules. GET and POST parse HTML responses and show the received byte length, decoded UTF-16 character count, and counts of `<p>`, `<div>`, `<span>`, and standard `<img>` tags. HEAD shows the status and resource metadata without a response body. The separate JavaFX Client accepts full `http://` and `https://` URLs for requests to other hosts. File upload/download management is kept separate from the browser request-method selector.
+The browser client is served at `/` from the server. Its **HTTP Request** view supports the assignment's three methods. Enter a full URL (or a path on the current host); the browser page is restricted to the server's own origin by browser CORS rules. GET and POST parse HTML responses and show the received byte length, decoded UTF-16 character count, and counts of `<p>`, `<div>`, `<span>`, and standard `<img>` tags. HEAD shows the status and resource metadata without a response body. The **Phân tích URL & IP** button calls the Java server's `UrlInspector`, which uses `URL` and `InetAddress` to display URL components and DNS-resolved IP addresses. The separate JavaFX Client offers the same analysis before sending a request. File upload/download management is kept separate from the browser request-method selector.
 
 The JavaFX **Server UI** provides the local administration workbench: TCP port/document-root controls, start/stop actions, LAN URL and write-token copy actions, a live uptime and `/__health` check, request counters, request filtering, runtime logs with export, and a searchable-by-selection view of shared/uploaded resources. The hosted Render service is headless; its internal JavaFX administration window is not exposed publicly.
 
@@ -54,6 +54,7 @@ The Web Client hosted on this address can request this same server. Browser CORS
 | `GET /` and `GET /<file>` | Serve the web client and public files | Public |
 | `GET /__files` | List files in the document root | Public |
 | `GET /__health` | JSON service status and uptime | Public |
+| `GET /__url-info?url=<encoded-url>` | Analyze URL components and resolve public host IP addresses with `URL` / `InetAddress` | Public, rate-limited |
 | `GET /__audit` | Read the latest persisted request events | Bearer token |
 | `POST /__submit` | Receive and display a URL-encoded form | Bearer token |
 | `POST /__upload` | Create an uploaded file, using `X-File-Name` | Bearer token |

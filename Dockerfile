@@ -1,8 +1,8 @@
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /build
-COPY src/core/AuditStore.java src/core/HttpServerCore.java src/server/ServerMain.java src/
+COPY src/core/AuditStore.java src/core/HttpServerCore.java src/core/UrlInspector.java src/server/ServerMain.java src/
 RUN javac -encoding UTF-8 -d out \
-    src/AuditStore.java src/HttpServerCore.java src/ServerMain.java
+    src/AuditStore.java src/HttpServerCore.java src/UrlInspector.java src/ServerMain.java
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
