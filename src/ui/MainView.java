@@ -5,6 +5,7 @@ import core.HttpServerCore;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -38,6 +39,9 @@ import javafx.scene.web.WebView;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
+import javafx.util.Duration;
 
 import java.io.File;
 import java.io.IOException;
@@ -113,6 +117,8 @@ public class MainView {
     private Label connectionHelpLabel;
     private Label dashboardServerStatus;
     private Label dashboardServerAddress;
+    private Label dashboardHealthStatus;
+    private Label serverUptimeLabel;
     private Label requestCountLabel;
     private Label rateLabel;
     private Label transferLabel;
@@ -130,6 +136,11 @@ public class MainView {
     private TableView<HttpServerCore.RequestInfo> requestTable;
     private TableView<ClientActivity> clientActivityTable;
     private TableView<EndpointInfo> endpointTable;
+    private FilteredList<HttpServerCore.RequestInfo> filteredRequests;
+    private TextField requestSearchField;
+    private Label requestFilterSummary;
+    private Timeline serverClock;
+    private long serverStartedAtMillis;
     private long totalBytes;
     private long totalLatency;
     private long totalRequests;
@@ -202,7 +213,7 @@ public class MainView {
     }
 
     private Node createHeader() {
-        Label mark = new Label("H");
+        Label mark = new Label("◈");
         mark.setStyle("-fx-background-color: #126b82; -fx-text-fill: white; "
                 + "-fx-font-size: 20px; -fx-font-weight: bold; -fx-background-radius: 11;");
         mark.setMinSize(42, 42);
@@ -237,7 +248,7 @@ public class MainView {
     }
 
     private Node createSidebar() {
-        Label controlTitle = sectionTitle("CHẾ ĐỘ");
+        Label controlTitle = sectionTitle("◈  CHẾ ĐỘ ỨNG DỤNG");
         roleBox = new ComboBox<>(FXCollections.observableArrayList(
                 "Server + Client (cùng máy)", "Server (máy chủ)", "Client (máy khách)"));
         roleBox.getSelectionModel().select(launchMode == LaunchMode.SERVER
@@ -251,7 +262,7 @@ public class MainView {
         roleCard.setPadding(new Insets(16));
         roleCard.setStyle(CARD_STYLE);
 
-        Label serverTitle = new Label("Máy chủ HTTP");
+        Label serverTitle = new Label("▣  CẤU HÌNH MÁY CHỦ");
         serverTitle.setFont(Font.font("Segoe UI", FontWeight.BOLD, 17));
         serverTitle.setStyle("-fx-text-fill: #1e293b;");
         portField = new TextField("8080");
@@ -262,14 +273,20 @@ public class MainView {
         rootField.setPromptText("Chọn thư mục chia sẻ");
         rootField.setTooltip(new javafx.scene.control.Tooltip(
                 "Thư mục chứa trang web và các tệp được chia sẻ."));
-        Button browseButton = secondaryButton("Chọn");
+        Button browseButton = secondaryButton("▰  Chọn");
+        browseButton.setTooltip(new javafx.scene.control.Tooltip(
+                "Chọn thư mục tài liệu mà HTTP Server sẽ chia sẻ."));
         browseButton.setOnAction(event -> chooseDocumentRoot());
 
-        startButton = primaryButton("Khởi động");
+        startButton = primaryButton("▶  Khởi động Server");
         startButton.setMaxWidth(Double.MAX_VALUE);
         startButton.setOnAction(event -> startServer());
-        stopButton = dangerButton("Dừng");
+        startButton.setTooltip(new javafx.scene.control.Tooltip(
+                "Mở TCP listener và bắt đầu nhận request HTTP."));
+        stopButton = dangerButton("■  Dừng");
         stopButton.setOnAction(event -> stopServer());
+        stopButton.setTooltip(new javafx.scene.control.Tooltip(
+                "Đóng TCP listener và ngắt các kết nối đang hoạt động."));
         HBox serverButtons = new HBox(8, startButton, stopButton);
         HBox.setHgrow(startButton, Priority.ALWAYS);
         HBox.setHgrow(stopButton, Priority.ALWAYS);
@@ -282,13 +299,13 @@ public class MainView {
         connectionHelpLabel.setWrapText(true);
         connectionHelpLabel.setStyle("-fx-text-fill: #748197; -fx-font-size: 10px; "
                 + "-fx-line-spacing: 2px;");
-        Button copyAddressButton = secondaryButton("Sao chép");
+        Button copyAddressButton = secondaryButton("⧉  Sao chép URL");
         copyAddressButton.setOnAction(event -> copyServerAddress());
         serverTokenDisplay = new TextField();
         serverTokenDisplay.setEditable(false);
         serverTokenDisplay.setPromptText("Sinh tự động khi khởi động");
         serverTokenDisplay.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 10px;");
-        Button copyTokenButton = secondaryButton("Sao chép");
+        Button copyTokenButton = secondaryButton("⧉  Sao chép token");
         copyTokenButton.setOnAction(event -> copyWriteToken());
         Label tokenHelp = new Label(
                 "Cần cho POST, PUT, DELETE và audit. Chỉ chia sẻ với client tin cậy.");
@@ -303,14 +320,14 @@ public class MainView {
         Label rootHelp = new Label("Tệp nhận từ client được lưu trong /uploads.");
         rootHelp.setStyle("-fx-text-fill: #748197; -fx-font-size: 10px;");
         serverSettingsCard = new VBox(10, serverTitle,
-                fieldCaption("CỔNG TCP"), portRow,
-                fieldCaption("THƯ MỤC CHIA SẺ"), rootRow, rootHelp,
+                fieldCaption("↔  CỔNG TCP"), portRow,
+                fieldCaption("▰  DOCUMENT ROOT"), rootRow, rootHelp,
                 serverButtons,
                 new javafx.scene.control.Separator(),
-                fieldCaption("ĐỊA CHỈ MÁY CHỦ (LAN)"),
+                fieldCaption("⌖  ĐỊA CHỈ MÁY CHỦ (LAN)"),
                 connectAddressLabel, connectionHelpLabel, copyAddressButton,
                 new javafx.scene.control.Separator(),
-                fieldCaption("TOKEN QUYỀN GHI"),
+                fieldCaption("◆  TOKEN QUYỀN GHI"),
                 serverTokenDisplay, tokenHelp, copyTokenButton);
         serverSettingsCard.setPadding(new Insets(16));
         serverSettingsCard.setStyle(CARD_STYLE);
@@ -344,7 +361,7 @@ public class MainView {
         successLabel = statValue("0%");
 
         VBox sidebar = launchMode == LaunchMode.SERVER
-                ? new VBox(serverSettingsCard)
+                ? new VBox(12, serverSettingsCard)
                 : new VBox(12, roleCard, serverSettingsCard, clientGuideCard);
         sidebar.setPadding(new Insets(15, 15, 15, 18));
         sidebar.setPrefWidth(320);
@@ -365,10 +382,10 @@ public class MainView {
             mainTabs.getTabs().add(createTab("HTTP Client", createHttpTestPage()));
         } else {
             mainTabs.getTabs().addAll(
-                    createTab("Tổng quan", createDashboard()),
-                    createTab("Yêu cầu", createRequestsPage()),
-                    createTab("Nhật ký", createLogPage()),
-                    createTab("Tệp", createEndpointsPage()));
+                    createTab("◉  Tổng quan", createDashboard()),
+                    createTab("⇄  Yêu cầu HTTP", createRequestsPage()),
+                    createTab("≡  Nhật ký", createLogPage()),
+                    createTab("▣  Tệp & tài nguyên", createEndpointsPage()));
             if (launchMode == LaunchMode.COMBINED) {
                 mainTabs.getTabs().add(createTab("HTTP Client", createHttpTestPage()));
             }
@@ -383,7 +400,7 @@ public class MainView {
     }
 
     private Node createDashboard() {
-        VBox heading = pageTitle("Tổng quan máy chủ",
+        VBox heading = pageTitle("◉  Tổng quan máy chủ",
                 "Theo dõi kết nối TCP, request HTTP và thao tác tệp từ các máy khách.");
 
         dashboardServerStatus = new Label("●  STOPPED");
@@ -395,42 +412,50 @@ public class MainView {
         Label serverInfo = new Label(
                 "Lắng nghe HTTP qua TCP · GET tệp công khai · ghi cần Bearer token");
         serverInfo.setStyle("-fx-text-fill: #748197; -fx-font-size: 11px;");
-        serverInfo.setText("HTTP qua TCP · đọc công khai · thao tác ghi cần token.");
-        Button checkHealth = secondaryButton("GET /__health");
+        serverInfo.setText("HTTP/1.0 · HTTP/1.1 qua TCP · GET công khai · thao tác ghi cần token.");
+        serverUptimeLabel = new Label("◷  Thời gian chạy: —");
+        serverUptimeLabel.setStyle("-fx-text-fill: #748197; -fx-font-size: 11px;");
+        dashboardHealthStatus = new Label("Chưa kiểm tra health endpoint");
+        dashboardHealthStatus.setStyle("-fx-text-fill: #748197; -fx-font-size: 11px;");
+        Button checkHealth = secondaryButton("◉  Kiểm tra health");
+        checkHealth.setTooltip(new javafx.scene.control.Tooltip(
+                "Gửi GET /__health đến server đang chạy."));
         checkHealth.setOnAction(event -> {
             if (!server.isRunning()) {
+                dashboardHealthStatus.setText("Server chưa chạy");
+                dashboardHealthStatus.setStyle("-fx-text-fill: #bf3f32; -fx-font-size: 11px;");
                 showInfo("Server chưa chạy", "Khởi động máy chủ trước khi kiểm tra /__health.");
                 return;
             }
-            if (launchMode == LaunchMode.COMBINED && urlField != null) {
-                urlField.setText(serverUrl("/__health"));
-                selectTab(clientTabIndex());
-                sendRequest();
-            } else {
-                runServerHealthCheck();
-            }
+            runServerHealthCheck();
         });
+        Button copyAddress = secondaryButton("⧉  Copy URL");
+        copyAddress.setTooltip(new javafx.scene.control.Tooltip(
+                "Sao chép địa chỉ LAN để gửi cho Client hoặc mở trên thiết bị khác."));
+        copyAddress.setOnAction(event -> copyServerAddress());
         Region statusSpacer = new Region();
         HBox.setHgrow(statusSpacer, Priority.ALWAYS);
         VBox serverIdentity = new VBox(7, dashboardServerStatus,
-                dashboardServerAddress, serverInfo);
-        HBox statusCard = new HBox(14, serverIdentity, statusSpacer, checkHealth);
+                dashboardServerAddress, serverInfo, serverUptimeLabel, dashboardHealthStatus);
+        HBox statusActions = new HBox(8, checkHealth, copyAddress);
+        statusActions.setAlignment(Pos.CENTER_RIGHT);
+        HBox statusCard = new HBox(14, serverIdentity, statusSpacer, statusActions);
         statusCard.setAlignment(Pos.CENTER_LEFT);
         statusCard.setPadding(new Insets(15));
         statusCard.setStyle(CARD_STYLE);
 
         HBox metrics = new HBox(10,
-                metricCard("YÊU CẦU", requestCountLabel),
-                metricCard("TỐC ĐỘ", rateLabel),
-                metricCard("THÀNH CÔNG", successLabel),
-                metricCard("ĐỘ TRỄ TB", latencyLabel),
-                metricCard("DỮ LIỆU", transferLabel));
+                metricCard("⇄  TỔNG REQUEST", requestCountLabel),
+                metricCard("↗  REQUEST / GIÂY", rateLabel),
+                metricCard("✓  THÀNH CÔNG", successLabel),
+                metricCard("◷  ĐỘ TRỄ TRUNG BÌNH", latencyLabel),
+                metricCard("⇵  RESPONSE DATA", transferLabel));
         for (Node metric : metrics.getChildren()) {
             HBox.setHgrow(metric, Priority.ALWAYS);
         }
 
-        Label recentTitle = sectionTitle("REQUEST GẦN ĐÂY");
-        Button viewAll = secondaryButton("Xem tất cả");
+        Label recentTitle = sectionTitle("⇄  REQUEST GẦN ĐÂY");
+        Button viewAll = secondaryButton("☷  Xem nhật ký request");
         viewAll.setOnAction(event -> selectTab(1));
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -453,17 +478,29 @@ public class MainView {
     }
 
     private Node createRequestsPage() {
-        VBox heading = pageTitle("Yêu cầu HTTP",
-                "Lịch sử máy khách kết nối và các phản hồi do máy chủ gửi.");
+        VBox heading = pageTitle("⇄  Yêu cầu HTTP",
+                "Theo dõi từng request từ TCP client, status response, độ trễ và dữ liệu trả về.");
         requestTable = createRequestTable();
-        requestTable.setItems(requests);
-        Label requestCount = new Label("Lịch sử gần nhất trong phiên hiện tại");
-        requestCount.setStyle("-fx-text-fill: #748197; -fx-font-size: 11px;");
-        Button clearHistory = secondaryButton("Xóa lịch sử hiển thị");
-        clearHistory.setOnAction(event -> requests.clear());
+        filteredRequests = new FilteredList<>(requests, request -> true);
+        requestTable.setItems(filteredRequests);
+        requestSearchField = new TextField();
+        requestSearchField.setPromptText("⌕  Lọc theo method, path, status hoặc client IP");
+        requestSearchField.setPrefWidth(390);
+        requestSearchField.textProperty().addListener((observable, previous, value) ->
+                filterRequests(value));
+        requestFilterSummary = new Label();
+        requestFilterSummary.setStyle("-fx-text-fill: #748197; -fx-font-size: 11px;");
+        filterRequests("");
+        Button clearHistory = secondaryButton("×  Xóa lịch sử phiên");
+        clearHistory.setTooltip(new javafx.scene.control.Tooltip(
+                "Xóa các request đang hiển thị; không xóa audit log đã lưu trên đĩa."));
+        clearHistory.setOnAction(event -> {
+            requests.clear();
+            updateRequestFilterSummary();
+        });
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox toolbar = new HBox(10, requestCount, spacer, clearHistory);
+        HBox toolbar = new HBox(10, requestSearchField, requestFilterSummary, spacer, clearHistory);
         toolbar.setAlignment(Pos.CENTER_LEFT);
         VBox content = new VBox(12, heading, toolbar, requestTable);
         content.setPadding(new Insets(19));
@@ -472,21 +509,25 @@ public class MainView {
     }
 
     private Node createLogPage() {
-        VBox heading = pageTitle("Nhật ký máy chủ",
-                "Chi tiết request line, HTTP headers và response theo thời gian thực.");
+        VBox heading = pageTitle("≡  Nhật ký máy chủ",
+                "Luồng TCP accept, HTTP request line, headers an toàn và kết quả xử lý theo thời gian thực.");
         serverLog = new TextArea();
         serverLog.setEditable(false);
         serverLog.setWrapText(false);
         serverLog.setStyle("-fx-control-inner-background: #101827; -fx-text-fill: #c7d2e5; "
                 + "-fx-font-family: 'Consolas'; -fx-font-size: 12px;");
         VBox.setVgrow(serverLog, Priority.ALWAYS);
-        Button clearLog = secondaryButton("Xóa log trên màn hình");
+        Button exportLog = secondaryButton("⇩  Xuất log…");
+        exportLog.setOnAction(event -> exportServerLog());
+        Button clearLog = secondaryButton("×  Xóa log màn hình");
+        clearLog.setTooltip(new javafx.scene.control.Tooltip(
+                "Xóa nội dung log đang hiển thị; không xóa audit đã lưu trên đĩa."));
         clearLog.setOnAction(event -> serverLog.clear());
         Label logHint = new Label("Log runtime của ứng dụng; xóa ở đây không xóa audit lưu trên đĩa.");
         logHint.setStyle("-fx-text-fill: #748197; -fx-font-size: 11px;");
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox toolbar = new HBox(logHint, spacer, clearLog);
+        HBox toolbar = new HBox(logHint, spacer, exportLog, clearLog);
         toolbar.setAlignment(Pos.CENTER_LEFT);
         VBox card = new VBox(serverLog);
         card.setPadding(new Insets(2));
@@ -498,9 +539,9 @@ public class MainView {
     }
 
     private Node createEndpointsPage() {
-        VBox heading = pageTitle("Thư viện tệp máy chủ",
-                "POST/PUT từ máy Client tạo tệp trong /uploads. Chọn một dòng để xem định dạng, dung lượng và URL.");
-        Button refresh = secondaryButton("↻   Làm mới danh sách");
+        VBox heading = pageTitle("▣  Tài nguyên máy chủ",
+                "Quản lý tài nguyên trong document root và uploads. Chọn file để xem MIME, dung lượng và URL HTTP.");
+        Button refresh = secondaryButton("↻  Làm mới danh sách");
         refresh.setOnAction(event -> refreshEndpoints());
         endpointTable = new TableView<>();
         endpointTable.setItems(endpoints);
@@ -543,9 +584,23 @@ public class MainView {
         });
         endpointTable.setPlaceholder(new Label("Không tìm thấy file trong document root."));
         Label inboxCaption = sectionTitle("TỆP NHẬN TỪ CLIENT VÀ TỆP CHIA SẺ");
+        Button copyFileUrl = secondaryButton("⧉  Copy URL");
+        copyFileUrl.setDisable(true);
+        copyFileUrl.setOnAction(event -> {
+            EndpointInfo selected = endpointTable.getSelectionModel().getSelectedItem();
+            if (selected == null) {
+                return;
+            }
+            ClipboardContent content = new ClipboardContent();
+            content.putString(serverUrl(selected.getHttpPath()));
+            Clipboard.getSystemClipboard().setContent(content);
+            showInfo("Đã sao chép URL tài nguyên", serverUrl(selected.getHttpPath()));
+        });
+        endpointTable.getSelectionModel().selectedItemProperty().addListener(
+                (observable, previous, selected) -> copyFileUrl.setDisable(selected == null));
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox toolbar = new HBox(10, inboxCaption, spacer, refresh);
+        HBox toolbar = new HBox(10, inboxCaption, spacer, copyFileUrl, refresh);
         toolbar.setAlignment(Pos.CENTER_LEFT);
         VBox card = new VBox(12, toolbar, endpointTable, fileDetails);
         card.setPadding(new Insets(15));
@@ -743,6 +798,14 @@ public class MainView {
             Path root = Path.of(rootValue);
             server.start(port, root, this::appendLog,
                     info -> Platform.runLater(() -> addRequest(info)));
+            serverStartedAtMillis = System.currentTimeMillis();
+            if (serverClock != null) {
+                serverClock.stop();
+            }
+            serverClock = new Timeline(new KeyFrame(Duration.seconds(1), event -> updateServerUptime()));
+            serverClock.setCycleCount(Timeline.INDEFINITE);
+            serverClock.play();
+            updateServerUptime();
             serverTokenDisplay.setText(server.getWriteToken());
             String lanAddress = HttpServerCore.getLanAddress();
             String connectUrl = lanAddress == null
@@ -786,6 +849,8 @@ public class MainView {
 
     private void runServerHealthCheck() {
         String healthUrl = "http://127.0.0.1:" + server.getPort() + "/__health";
+        dashboardHealthStatus.setText("Đang gửi GET /__health…");
+        dashboardHealthStatus.setStyle("-fx-text-fill: #9a6500; -fx-font-size: 11px;");
         Task<HttpClientCore.Response> healthRequest = new Task<HttpClientCore.Response>() {
             @Override
             protected HttpClientCore.Response call() throws Exception {
@@ -794,12 +859,20 @@ public class MainView {
         };
         healthRequest.setOnSucceeded(event -> {
             HttpClientCore.Response response = healthRequest.getValue();
+            boolean healthy = response.statusCode >= 200 && response.statusCode < 300;
+            dashboardHealthStatus.setText((healthy ? "✓  " : "!  ")
+                    + response.statusLine + " · " + response.body);
+            dashboardHealthStatus.setStyle("-fx-text-fill: "
+                    + (healthy ? "#14804a" : "#bf3f32") + "; -fx-font-size: 11px;");
             appendLog("Health check GET " + healthUrl + " → "
                     + response.statusLine + " · " + response.body);
         });
-        healthRequest.setOnFailed(event -> appendLog(
-                "Health check GET " + healthUrl + " failed: "
-                        + healthRequest.getException().getMessage()));
+        healthRequest.setOnFailed(event -> {
+            String error = healthRequest.getException().getMessage();
+            dashboardHealthStatus.setText("✕  Health check thất bại: " + error);
+            dashboardHealthStatus.setStyle("-fx-text-fill: #bf3f32; -fx-font-size: 11px;");
+            appendLog("Health check GET " + healthUrl + " failed: " + error);
+        });
         Thread worker = new Thread(healthRequest, "http-health-check");
         worker.setDaemon(true);
         worker.start();
@@ -810,11 +883,17 @@ public class MainView {
             return;
         }
         server.stop();
+        if (serverClock != null) {
+            serverClock.stop();
+        }
         serverTokenDisplay.clear();
         serverState.setText("●  STOPPED");
         serverState.setStyle(stateStyle(false));
         addressBadge.setText("SERVER ĐÃ DỪNG");
         connectAddressLabel.setText("Server đã dừng. Nhấn Start server để mở lại.");
+        serverUptimeLabel.setText("◷  Thời gian chạy: —");
+        dashboardHealthStatus.setText("Server đã dừng");
+        dashboardHealthStatus.setStyle("-fx-text-fill: #748197; -fx-font-size: 11px;");
         updateDashboardServerSummary();
         startButton.setDisable(false);
         stopButton.setDisable(true);
@@ -921,6 +1000,62 @@ public class MainView {
         content.putString(address);
         Clipboard.getSystemClipboard().setContent(content);
         showInfo("Đã copy URL", "Gửi địa chỉ này cho máy client: " + address);
+    }
+
+    private void updateServerUptime() {
+        if (!server.isRunning() || serverStartedAtMillis == 0 || serverUptimeLabel == null) {
+            return;
+        }
+        long seconds = Math.max(0, (System.currentTimeMillis() - serverStartedAtMillis) / 1000);
+        long hours = seconds / 3600;
+        long minutes = seconds % 3600 / 60;
+        long remainingSeconds = seconds % 60;
+        serverUptimeLabel.setText(String.format(Locale.ROOT,
+                "◷  Thời gian chạy: %02d:%02d:%02d  ·  TCP :%d",
+                hours, minutes, remainingSeconds, server.getPort()));
+    }
+
+    private void filterRequests(String query) {
+        if (filteredRequests == null) {
+            return;
+        }
+        String normalized = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        filteredRequests.setPredicate(request -> normalized.isEmpty()
+                || request.method.toLowerCase(Locale.ROOT).contains(normalized)
+                || request.path.toLowerCase(Locale.ROOT).contains(normalized)
+                || String.valueOf(request.statusCode).contains(normalized)
+                || displayClientAddress(request.clientAddress).toLowerCase(Locale.ROOT)
+                        .contains(normalized));
+        updateRequestFilterSummary();
+    }
+
+    private void updateRequestFilterSummary() {
+        if (filteredRequests != null && requestFilterSummary != null) {
+            requestFilterSummary.setText(filteredRequests.size() + " / "
+                    + requests.size() + " request");
+        }
+    }
+
+    private void exportServerLog() {
+        if (serverLog == null || serverLog.getText().isEmpty()) {
+            showInfo("Chưa có log", "Chưa có nội dung log để xuất.");
+            return;
+        }
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Xuất nhật ký máy chủ");
+        chooser.setInitialFileName("lab7-server-" + LocalTime.now()
+                .format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".log");
+        File destination = chooser.showSaveDialog(stage);
+        if (destination == null) {
+            return;
+        }
+        try {
+            Files.writeString(destination.toPath(), serverLog.getText(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            showInfo("Đã xuất log", destination.getAbsolutePath());
+        } catch (IOException e) {
+            showInfo("Không thể xuất log", e.getMessage());
+        }
     }
 
     private void copyWriteToken() {
@@ -1497,6 +1632,7 @@ public class MainView {
         if (requestTable != null) {
             requestTable.refresh();
         }
+        updateRequestFilterSummary();
     }
 
     private void updateStatistics() {

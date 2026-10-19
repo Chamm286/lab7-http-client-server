@@ -14,6 +14,8 @@ For a two-computer demo, both computers must be on the same LAN/Wi-Fi and the se
 
 The browser client is served at `/` from the server. Its **HTTP Request** view supports the assignment's three methods. Enter a full URL (or a path on the current host); the browser page is restricted to the server's own origin by browser CORS rules. GET and POST parse HTML responses and show the received byte length, decoded UTF-16 character count, and counts of `<p>`, `<div>`, `<span>`, and standard `<img>` tags. HEAD shows the status and resource metadata without a response body. The separate JavaFX Client accepts full `http://` and `https://` URLs for requests to other hosts. File upload/download management is kept separate from the browser request-method selector.
 
+The JavaFX **Server UI** provides the local administration workbench: TCP port/document-root controls, start/stop actions, LAN URL and write-token copy actions, a live uptime and `/__health` check, request counters, request filtering, runtime logs with export, and a searchable-by-selection view of shared/uploaded resources. The hosted Render service is headless; its internal JavaFX administration window is not exposed publicly.
+
 ## Run the server without the JavaFX desktop UI
 
 Install a JDK (21 or newer), then from the project directory run:
