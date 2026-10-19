@@ -8,11 +8,14 @@ import java.io.InputStream;
 import java.net.URLDecoder;
 import java.net.InetAddress;
 import java.net.Inet4Address;
+import java.net.InetSocketAddress;
+import java.net.HttpURLConnection;
 import java.net.NetworkInterface;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.URI;
+import java.net.URL;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.nio.charset.StandardCharsets;
@@ -31,10 +34,14 @@ import java.util.Map;
 import java.util.Base64;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 public class HttpServerCore {
     private static final long MAX_UPLOAD_BYTES = 50L * 1024 * 1024;
+    private static final int MAX_BROWSER_BODY_BYTES = 1024 * 1024;
+    private static final int MAX_BROWSER_RESPONSE_BYTES = 5 * 1024 * 1024;
+    private static final int MAX_BROWSER_REQUESTS_PER_MINUTE = 30;
     public interface ServerLogger {
         void log(String message);
     }
@@ -70,6 +77,8 @@ public class HttpServerCore {
     private volatile String writeToken;
     private volatile AuditStore auditStore;
     private volatile long startedAtMillis;
+    private final Map<String, ProxyRateWindow> browserRateWindows = new ConcurrentHashMap<>();
+    private int browserRequestCounter;
 
     public synchronized void start(int port, Path documentRoot, ServerLogger logger,
             Consumer<RequestInfo> requestListener) throws IOException {
@@ -87,7 +96,12 @@ public class HttpServerCore {
         AuditStore persistentAudit = new AuditStore(dataDirectory);
         byte[] tokenBytes = new byte[32];
         new SecureRandom().nextBytes(tokenBytes);
-        ServerSocket socket = new ServerSocket(port);
+        // Bind explicitly to IPv4 wildcard. This guarantees that both
+        // 127.0.0.1/localhost and the machine's LAN IPv4 address reach the
+        // same listener, independent of the JVM's IPv6 wildcard behavior.
+        ServerSocket socket = new ServerSocket();
+        socket.setReuseAddress(false);
+        socket.bind(new InetSocketAddress(InetAddress.getByName("0.0.0.0"), port));
         this.port = socket.getLocalPort();
         this.documentRoot = root.toRealPath();
         this.auditStore = persistentAudit;
@@ -225,6 +239,7 @@ public class HttpServerCore {
         long startedAt = System.nanoTime();
         String method = "-";
         String path = "/";
+        String requestTarget = "/";
         String protocol = "HTTP/1.1";
         int status = 400;
         long bytesSent = 0;
@@ -251,7 +266,8 @@ public class HttpServerCore {
                     throw new HttpProtocolException(505, "HTTP Version Not Supported",
                             "Máy chủ hỗ trợ HTTP/1.0 và HTTP/1.1.");
                 }
-                path = requestPath(parts[1], method);
+                requestTarget = parts[1];
+                path = requestPath(requestTarget, method);
 
                 Map<String, String> headers = readHeaders(in);
                 if ("HTTP/1.1".equals(protocol)
@@ -309,9 +325,18 @@ public class HttpServerCore {
                     writeResponse(out, protocol, status, "OK", "text/plain; charset=UTF-8",
                             body, false, Map.of("Allow", allow));
                 } else if ("POST".equals(method) || "PUT".equals(method)) {
-                    byte[] requestBody = readRequestBody(in, headers);
+                    if ("/__browse".equals(path) && "POST".equals(method)
+                            && declaredBodyLength(headers) > MAX_BROWSER_BODY_BYTES) {
+                        throw new HttpProtocolException(413, "Payload Too Large",
+                                "Body POST qua Browser tối đa 1 MB.");
+                    }
+                    byte[] requestBody = readRequestBody(in, headers,
+                            "/__browse".equals(path) ? MAX_BROWSER_BODY_BYTES : MAX_UPLOAD_BYTES);
                     FileResponse response;
-                    if ("POST".equals(method) && "/__upload".equals(path)) {
+                    if ("/__browse".equals(path) && "POST".equals(method)) {
+                        response = fetchExternalResource(requestTarget, method, requestBody,
+                                headers.get("content-type"), remoteAddress);
+                    } else if ("POST".equals(method) && "/__upload".equals(path)) {
                         response = saveUpload(headers.get("x-file-name"), requestBody);
                     } else if ("POST".equals(method) && "/__submit".equals(path)) {
                         response = submitForm(requestBody, headers.get("content-type"));
@@ -340,7 +365,9 @@ public class HttpServerCore {
                 } else if ("GET".equals(method) || "HEAD".equals(method)) {
                     FileResponse response;
                     try {
-                        response = "/__health".equals(path) ? healthResponse()
+                        response = "/__browse".equals(path)
+                                ? fetchExternalResource(requestTarget, method, null, null, remoteAddress)
+                                : "/__health".equals(path) ? healthResponse()
                                 : "/__audit".equals(path) ? auditResponse()
                                         : findFile(path);
                     } catch (IOException e) {
@@ -438,13 +465,18 @@ public class HttpServerCore {
 
     private byte[] readRequestBody(InputStream in, Map<String, String> headers)
             throws IOException {
+        return readRequestBody(in, headers, MAX_UPLOAD_BYTES);
+    }
+
+    private byte[] readRequestBody(InputStream in, Map<String, String> headers, long maxBytes)
+            throws IOException {
         String transferEncoding = headers.get("transfer-encoding");
         if (transferEncoding != null) {
             if (!"chunked".equalsIgnoreCase(transferEncoding)) {
                 throw new HttpProtocolException(501, "Not Implemented",
                         "Máy chủ chỉ hỗ trợ Transfer-Encoding: chunked.");
             }
-            return readChunkedBody(in);
+            return readChunkedBody(in, maxBytes);
         }
         String contentLength = headers.get("content-length");
         if (contentLength == null) {
@@ -460,14 +492,14 @@ public class HttpServerCore {
         if (length < 0) {
             throw new HttpProtocolException(400, "Bad Request", "Content-Length không hợp lệ.");
         }
-        if (length > MAX_UPLOAD_BYTES) {
+        if (length > maxBytes) {
             throw new HttpProtocolException(413, "Payload Too Large",
-                    "Request body vượt giới hạn 50 MB.");
+                    "Request body vượt giới hạn " + formatByteLimit(maxBytes) + ".");
         }
         return readBody(in, length);
     }
 
-    private byte[] readChunkedBody(InputStream in) throws IOException {
+    private byte[] readChunkedBody(InputStream in, long maxBytes) throws IOException {
         ByteArrayOutputStream body = new ByteArrayOutputStream();
         while (true) {
             String line = readLine(in);
@@ -503,10 +535,11 @@ public class HttpServerCore {
                                 "Trailer của chunked body không hợp lệ.");
                     }
                 }
+
             }
-            if (chunkSize > MAX_UPLOAD_BYTES - body.size()) {
+            if (chunkSize > maxBytes - body.size()) {
                 throw new HttpProtocolException(413, "Payload Too Large",
-                        "Request body vượt giới hạn 50 MB.");
+                        "Request body vượt giới hạn " + formatByteLimit(maxBytes) + ".");
             }
             byte[] chunk = readBody(in, chunkSize);
             body.write(chunk);
@@ -515,6 +548,27 @@ public class HttpServerCore {
                         "Chunk phải kết thúc bằng CRLF.");
             }
         }
+    }
+
+    private long declaredBodyLength(Map<String, String> headers) throws HttpProtocolException {
+        String value = headers.get("content-length");
+        if (value == null) {
+            return 0;
+        }
+        try {
+            long length = Long.parseLong(value);
+            if (length < 0) {
+                throw new NumberFormatException();
+            }
+            return length;
+        } catch (NumberFormatException e) {
+            throw new HttpProtocolException(400, "Bad Request", "Content-Length không hợp lệ.");
+        }
+    }
+
+    private String formatByteLimit(long bytes) {
+        return bytes >= 1024 * 1024 ? (bytes / (1024 * 1024)) + " MB"
+                : (bytes / 1024) + " KB";
     }
 
     private FileResponse submitForm(byte[] body, String contentType) {
@@ -588,6 +642,9 @@ public class HttpServerCore {
         if ("*".equals(path)) {
             return "GET, HEAD, POST, PUT, DELETE, OPTIONS";
         }
+        if ("/__browse".equals(path)) {
+            return "GET, HEAD, POST, OPTIONS";
+        }
         if ("/__upload".equals(path)) {
             return "POST, OPTIONS";
         }
@@ -613,6 +670,9 @@ public class HttpServerCore {
     }
 
     private boolean requiresWritePermission(String method, String path) {
+        if ("/__browse".equals(path)) {
+            return false;
+        }
         return "POST".equals(method) || "PUT".equals(method) || "DELETE".equals(method)
                 || "/__audit".equals(path) && ("GET".equals(method) || "HEAD".equals(method));
     }
@@ -626,6 +686,254 @@ public class HttpServerCore {
         byte[] expected = activeToken.getBytes(StandardCharsets.UTF_8);
         byte[] supplied = authorization.substring(7).trim().getBytes(StandardCharsets.UTF_8);
         return MessageDigest.isEqual(expected, supplied);
+    }
+
+    private FileResponse fetchExternalResource(String requestTarget, String method,
+            byte[] requestBody, String contentType, String clientAddress) {
+        URI target;
+        try {
+            String encodedUrl = URI.create(requestTarget).getRawQuery();
+            String externalUrl = queryParameter(encodedUrl, "url");
+            if (externalUrl == null || externalUrl.isBlank()) {
+                return errorResponse(400, "Bad Request",
+                        "Thiếu URL đích. Dùng /__browse?url=<encoded-http(s)-url>.");
+            }
+            target = URI.create(externalUrl);
+            validateBrowserTarget(target);
+        } catch (IllegalArgumentException e) {
+            return errorResponse(400, "Bad Request", "URL đích không hợp lệ.");
+        } catch (SecurityException e) {
+            return errorResponse(403, "Forbidden", e.getMessage());
+        } catch (IOException e) {
+            return errorResponse(502, "Bad Gateway",
+                    "Không phân giải được host đích: " + e.getMessage());
+        }
+
+        if (!allowBrowserRequest(clientAddress)) {
+            return errorResponse(429, "Too Many Requests",
+                    "Đã đạt giới hạn 30 request Browser mỗi phút từ địa chỉ này.");
+        }
+        log("Browser proxy " + method + " → " + target);
+        URI current = target;
+        String currentMethod = method;
+        byte[] currentBody = requestBody;
+        String currentContentType = contentType;
+
+        for (int redirects = 0; redirects <= 5; redirects++) {
+            HttpURLConnection connection = null;
+            try {
+                validateBrowserTarget(current);
+                URL url = current.toURL();
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setInstanceFollowRedirects(false);
+                connection.setConnectTimeout(5000);
+                connection.setReadTimeout(10000);
+                connection.setRequestMethod(currentMethod);
+                connection.setRequestProperty("Accept", "*/*");
+                connection.setRequestProperty("Accept-Encoding", "identity");
+                connection.setRequestProperty("User-Agent", "Lab7-HTTP-Browser/1.0");
+                connection.setRequestProperty("Connection", "close");
+                if ("POST".equals(currentMethod)) {
+                    String forwardedType = safeHeaderValue(currentContentType);
+                    connection.setRequestProperty("Content-Type",
+                            forwardedType.isEmpty()
+                                    ? "application/x-www-form-urlencoded; charset=UTF-8"
+                                    : forwardedType);
+                    connection.setDoOutput(true);
+                    byte[] body = currentBody == null ? new byte[0] : currentBody;
+                    connection.setFixedLengthStreamingMode(body.length);
+                    try (java.io.OutputStream output = connection.getOutputStream()) {
+                        output.write(body);
+                    }
+                }
+
+                int status = connection.getResponseCode();
+                String reason = connection.getResponseMessage();
+                String location = connection.getHeaderField("Location");
+                if (isRedirectStatus(status) && location != null) {
+                    if (redirects == 5) {
+                        return errorResponse(502, "Bad Gateway",
+                                "Website vượt quá giới hạn 5 lần chuyển hướng.");
+                    }
+                    current = current.resolve(location);
+                    validateBrowserTarget(current);
+                    if (status == 303 || (status == 301 || status == 302)
+                            && "POST".equals(currentMethod)) {
+                        currentMethod = "GET";
+                        currentBody = null;
+                        currentContentType = null;
+                    }
+                    continue;
+                }
+
+                byte[] body = new byte[0];
+                if (!"HEAD".equals(currentMethod) && status != 204 && status != 304) {
+                    InputStream responseStream = status >= 400
+                            ? connection.getErrorStream() : connection.getInputStream();
+                    if (responseStream != null) {
+                        try (InputStream input = responseStream) {
+                            body = readBounded(input, MAX_BROWSER_RESPONSE_BYTES);
+                        }
+                    }
+                }
+                String responseType = safeHeaderValue(connection.getContentType());
+                if (responseType.isEmpty()) {
+                    responseType = "application/octet-stream";
+                }
+                Map<String, String> forwardedHeaders = new LinkedHashMap<>();
+                copyResponseHeader(connection, forwardedHeaders, "Last-Modified");
+                copyResponseHeader(connection, forwardedHeaders, "ETag");
+                copyResponseHeader(connection, forwardedHeaders, "Cache-Control");
+                copyResponseHeader(connection, forwardedHeaders, "Expires");
+                copyResponseHeader(connection, forwardedHeaders, "Content-Length");
+                long actualLength = connection.getContentLengthLong();
+                if (!forwardedHeaders.containsKey("Content-Length") && actualLength >= 0) {
+                    forwardedHeaders.put("Content-Length", String.valueOf(actualLength));
+                } else if (!"HEAD".equals(method)) {
+                    forwardedHeaders.put("Content-Length", String.valueOf(body.length));
+                }
+                return new FileResponse(status, reason == null ? "Response" : reason,
+                        responseType, body, forwardedHeaders);
+            } catch (SecurityException e) {
+                return errorResponse(403, "Forbidden", e.getMessage());
+            } catch (IOException e) {
+                log("Browser proxy lỗi với " + current + ": " + e.getMessage());
+                return errorResponse(502, "Bad Gateway",
+                        "Không lấy được trang đích (" + e.getMessage() + ").");
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
+            }
+        }
+        return errorResponse(502, "Bad Gateway", "Không thể hoàn tất chuyển hướng.");
+    }
+
+    private String queryParameter(String rawQuery, String name) {
+        if (rawQuery == null) {
+            return null;
+        }
+        for (String pair : rawQuery.split("&")) {
+            int separator = pair.indexOf('=');
+            String rawName = separator < 0 ? pair : pair.substring(0, separator);
+            if (name.equals(URLDecoder.decode(rawName, StandardCharsets.UTF_8))) {
+                return URLDecoder.decode(separator < 0 ? "" : pair.substring(separator + 1),
+                        StandardCharsets.UTF_8);
+            }
+        }
+        return null;
+    }
+
+    private void validateBrowserTarget(URI target) throws IOException {
+        if (target == null || !("http".equalsIgnoreCase(target.getScheme())
+                || "https".equalsIgnoreCase(target.getScheme()))
+                || target.getHost() == null || target.getRawUserInfo() != null
+                || target.getRawFragment() != null) {
+            throw new IllegalArgumentException("Chỉ chấp nhận URL http(s) không có user info/fragment.");
+        }
+        int port = target.getPort();
+        if (port != -1 && port != 80 && port != 443) {
+            throw new SecurityException("Browser proxy chỉ hỗ trợ cổng công khai 80 và 443.");
+        }
+        String host = target.getHost().toLowerCase(Locale.ROOT);
+        if (host.endsWith(".localhost") || host.endsWith(".local")
+                || host.endsWith(".internal") || "localhost".equals(host)) {
+            throw new SecurityException("Không cho phép truy cập host nội bộ.");
+        }
+        for (InetAddress address : InetAddress.getAllByName(host)) {
+            if (!isPublicAddress(address)) {
+                throw new SecurityException("Không cho phép truy cập địa chỉ IP nội bộ hoặc đặc biệt.");
+            }
+        }
+    }
+
+    private boolean isPublicAddress(InetAddress address) {
+        if (address.isAnyLocalAddress() || address.isLoopbackAddress()
+                || address.isLinkLocalAddress() || address.isSiteLocalAddress()
+                || address.isMulticastAddress()) {
+            return false;
+        }
+        byte[] bytes = address.getAddress();
+        if (address instanceof Inet4Address) {
+            int first = bytes[0] & 0xff;
+            int second = bytes[1] & 0xff;
+            int third = bytes[2] & 0xff;
+            return first != 0 && first != 10 && first != 127
+                    && !(first == 100 && second >= 64 && second <= 127)
+                    && !(first == 169 && second == 254)
+                    && !(first == 172 && second >= 16 && second <= 31)
+                    && !(first == 192 && (second == 0 || second == 168))
+                    && !(first == 192 && second == 0 && third == 2)
+                    && !(first == 198 && (second == 18 || second == 19 || second == 51))
+                    && !(first == 203 && second == 0 && third == 113)
+                    && first < 224;
+        }
+        return address instanceof java.net.Inet6Address
+                && (bytes[0] & 0xe0) == 0x20
+                && !(bytes[0] == 0x20 && bytes[1] == 0x01
+                        && (bytes[2] & 0xff) == 0x0d && (bytes[3] & 0xff) == 0xb8);
+    }
+
+    private boolean allowBrowserRequest(String clientAddress) {
+        long now = System.currentTimeMillis();
+        if (++browserRequestCounter % 128 == 0) {
+            browserRateWindows.entrySet().removeIf(entry -> now - entry.getValue().windowStarted > 120_000);
+        }
+        if (browserRateWindows.size() >= 10_000 && !browserRateWindows.containsKey(clientAddress)) {
+            return false;
+        }
+        ProxyRateWindow window = browserRateWindows.computeIfAbsent(
+                clientAddress, ignored -> new ProxyRateWindow(now));
+        return window.tryAcquire(now);
+    }
+
+    private boolean isRedirectStatus(int status) {
+        return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
+    }
+
+    private byte[] readBounded(InputStream input, int maxBytes) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int count;
+        while ((count = input.read(buffer)) != -1) {
+            if (output.size() + count > maxBytes) {
+                throw new IOException("Response trang vượt giới hạn 5 MB.");
+            }
+            output.write(buffer, 0, count);
+        }
+        return output.toByteArray();
+    }
+
+    private void copyResponseHeader(HttpURLConnection connection, Map<String, String> target,
+            String name) {
+        String value = safeHeaderValue(connection.getHeaderField(name));
+        if (!value.isEmpty()) {
+            target.put(name, value);
+        }
+    }
+
+    private String safeHeaderValue(String value) {
+        if (value == null || value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0) {
+            return "";
+        }
+        return value.length() > 2048 ? value.substring(0, 2048) : value;
+    }
+
+    private static final class ProxyRateWindow {
+        private long windowStarted;
+        private int requests;
+
+        private ProxyRateWindow(long windowStarted) {
+            this.windowStarted = windowStarted;
+        }
+
+        private synchronized boolean tryAcquire(long now) {
+            if (now - windowStarted >= 60_000) {
+                windowStarted = now;
+                requests = 0;
+            }
+            return ++requests <= MAX_BROWSER_REQUESTS_PER_MINUTE;
+        }
     }
 
     private FileResponse healthResponse() {

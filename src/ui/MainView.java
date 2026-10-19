@@ -20,12 +20,16 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
+import javafx.scene.control.TitledPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
@@ -33,6 +37,8 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.scene.layout.StackPane;
+import javafx.scene.shape.SVGPath;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.web.WebView;
@@ -67,12 +73,13 @@ public class MainView {
     }
 
     private static final String APP_STYLE =
-            "-fx-font-family: 'Segoe UI'; -fx-font-size: 13px; "
-                    + "-fx-background-color: #f5f7fa;";
+            "-fx-font-family: 'Segoe UI'; -fx-font-size: 14px; "
+                    + "-fx-background-color: #eef2f7; -fx-text-fill: #172033;";
     private static final String CARD_STYLE =
-            "-fx-background-color: white; -fx-background-radius: 10; "
-                    + "-fx-border-color: #e3e8ef; -fx-border-radius: 10; "
-                    + "-fx-padding: 14;";
+            "-fx-background-color: #ffffff; -fx-background-radius: 14; "
+                    + "-fx-border-color: #e2e8f0; -fx-border-radius: 14; "
+                    + "-fx-padding: 16; "
+                    + "-fx-effect: dropshadow(gaussian, rgba(15,23,42,0.055), 14, 0, 0, 4);";
     private static final DateTimeFormatter LOG_TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private final HttpServerCore server = new HttpServerCore();
@@ -91,7 +98,7 @@ public class MainView {
     private PasswordField writeTokenField;
     private TextField visibleWriteTokenField;
     private TextField serverTokenDisplay;
-    private ComboBox<String> methodBox;
+    private String selectedHttpMethod = "GET";
     private ComboBox<String> transferMethodBox;
     private ComboBox<String> roleBox;
     private Label roleDescription;
@@ -195,6 +202,7 @@ public class MainView {
             addressBadge.setText("HTTP REQUEST WORKBENCH");
         }
         stage.show();
+        Platform.runLater(this::applyProfessionalTheme);
         if (mode != LaunchMode.CLIENT) {
             refreshEndpoints();
             updateRoleControls();
@@ -213,22 +221,25 @@ public class MainView {
     }
 
     private Node createHeader() {
-        Label mark = new Label("◈");
-        mark.setStyle("-fx-background-color: #126b82; -fx-text-fill: white; "
-                + "-fx-font-size: 20px; -fx-font-weight: bold; -fx-background-radius: 11;");
-        mark.setMinSize(42, 42);
-        mark.setAlignment(Pos.CENTER);
+        StackPane mark = new StackPane(svgIcon(
+                "M3 4h18v3H3z M3 10h8v10H3z M13 10h8v4h-8z M13 16h8v4h-8z",
+                19, "#ffffff"));
+        mark.setMinSize(44, 44);
+        mark.setMaxSize(44, 44);
+        mark.setStyle("-fx-background-color: linear-gradient(to bottom right, #0ea5e9, #1d4ed8); "
+                + "-fx-background-radius: 14; "
+                + "-fx-effect: dropshadow(gaussian, rgba(37,99,235,0.28), 12, 0, 0, 3);");
 
         Label title = new Label(launchMode == LaunchMode.SERVER ? "HTTP SERVER"
                 : launchMode == LaunchMode.CLIENT ? "HTTP CLIENT"
                         : "HTTP SERVER & CLIENT");
-        title.setFont(Font.font("Segoe UI", FontWeight.BOLD, 16));
+        title.setFont(Font.font("Segoe UI", FontWeight.BOLD, 17));
         Label subtitle = new Label(launchMode == LaunchMode.SERVER
                 ? "LAB 7  ·  SERVER CONTROL PANEL"
                 : launchMode == LaunchMode.CLIENT
                         ? "LAB 7  ·  HTTP REQUEST WORKBENCH"
                         : "LAB 7  ·  HTTP SERVICE CONTROL CENTER");
-        subtitle.setStyle("-fx-text-fill: #8b93a7; -fx-font-size: 10px; -fx-font-weight: bold;");
+        subtitle.setStyle("-fx-text-fill: #748198; -fx-font-size: 10px; -fx-font-weight: bold;");
         VBox brand = new VBox(2, title, subtitle);
 
         addressBadge = new Label("SERVER CHƯA CHẠY");
@@ -243,12 +254,14 @@ public class MainView {
         HBox header = new HBox(13, mark, brand, spacer, addressBadge, serverState);
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(12, 22, 12, 22));
-        header.setStyle("-fx-background-color: white; -fx-border-color: transparent transparent #e2e8ef transparent;");
+        header.setStyle("-fx-background-color: white; "
+                + "-fx-border-color: transparent transparent #dce4ef transparent; "
+                + "-fx-effect: dropshadow(gaussian, rgba(15,23,42,0.05), 8, 0, 0, 2);");
         return header;
     }
 
     private Node createSidebar() {
-        Label controlTitle = sectionTitle("◈  CHẾ ĐỘ ỨNG DỤNG");
+        Label controlTitle = sectionTitle("CHẾ ĐỘ ỨNG DỤNG");
         roleBox = new ComboBox<>(FXCollections.observableArrayList(
                 "Server + Client (cùng máy)", "Server (máy chủ)", "Client (máy khách)"));
         roleBox.getSelectionModel().select(launchMode == LaunchMode.SERVER
@@ -262,7 +275,7 @@ public class MainView {
         roleCard.setPadding(new Insets(16));
         roleCard.setStyle(CARD_STYLE);
 
-        Label serverTitle = new Label("▣  CẤU HÌNH MÁY CHỦ");
+        Label serverTitle = new Label("CẤU HÌNH MÁY CHỦ");
         serverTitle.setFont(Font.font("Segoe UI", FontWeight.BOLD, 17));
         serverTitle.setStyle("-fx-text-fill: #1e293b;");
         portField = new TextField("8080");
@@ -273,17 +286,17 @@ public class MainView {
         rootField.setPromptText("Chọn thư mục chia sẻ");
         rootField.setTooltip(new javafx.scene.control.Tooltip(
                 "Thư mục chứa trang web và các tệp được chia sẻ."));
-        Button browseButton = secondaryButton("▰  Chọn");
+        Button browseButton = secondaryButton("Duyệt");
         browseButton.setTooltip(new javafx.scene.control.Tooltip(
                 "Chọn thư mục tài liệu mà HTTP Server sẽ chia sẻ."));
         browseButton.setOnAction(event -> chooseDocumentRoot());
 
-        startButton = primaryButton("▶  Khởi động Server");
+        startButton = primaryButton("Khởi động");
         startButton.setMaxWidth(Double.MAX_VALUE);
         startButton.setOnAction(event -> startServer());
         startButton.setTooltip(new javafx.scene.control.Tooltip(
                 "Mở TCP listener và bắt đầu nhận request HTTP."));
-        stopButton = dangerButton("■  Dừng");
+        stopButton = dangerButton("Dừng");
         stopButton.setOnAction(event -> stopServer());
         stopButton.setTooltip(new javafx.scene.control.Tooltip(
                 "Đóng TCP listener và ngắt các kết nối đang hoạt động."));
@@ -299,13 +312,13 @@ public class MainView {
         connectionHelpLabel.setWrapText(true);
         connectionHelpLabel.setStyle("-fx-text-fill: #748197; -fx-font-size: 10px; "
                 + "-fx-line-spacing: 2px;");
-        Button copyAddressButton = secondaryButton("⧉  Sao chép URL");
+        Button copyAddressButton = secondaryButton("Sao chép URL");
         copyAddressButton.setOnAction(event -> copyServerAddress());
         serverTokenDisplay = new TextField();
         serverTokenDisplay.setEditable(false);
         serverTokenDisplay.setPromptText("Sinh tự động khi khởi động");
         serverTokenDisplay.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 10px;");
-        Button copyTokenButton = secondaryButton("⧉  Sao chép token");
+        Button copyTokenButton = secondaryButton("Sao chép token");
         copyTokenButton.setOnAction(event -> copyWriteToken());
         Label tokenHelp = new Label(
                 "Cần cho POST, PUT, DELETE và audit. Chỉ chia sẻ với client tin cậy.");
@@ -379,15 +392,19 @@ public class MainView {
     private Node createWorkspace() {
         mainTabs = new TabPane();
         if (launchMode == LaunchMode.CLIENT) {
-            mainTabs.getTabs().add(createTab("HTTP Client", createHttpTestPage()));
+            mainTabs.getTabs().add(createIconTab("HTTP Client",
+                    "M3 4h18v13H3z M8 21h8v-2H8z M7 8h10v2H7z M7 12h7v2H7z",
+                    createHttpTestPage()));
         } else {
             mainTabs.getTabs().addAll(
-                    createTab("◉  Tổng quan", createDashboard()),
-                    createTab("⇄  Yêu cầu HTTP", createRequestsPage()),
-                    createTab("≡  Nhật ký", createLogPage()),
-                    createTab("▣  Tệp & tài nguyên", createEndpointsPage()));
+                    createIconTab("Tổng quan", "M3 3h8v8H3z M13 3h8v5h-8z M13 10h8v11h-8z M3 13h8v8H3z", createDashboard()),
+                    createIconTab("Yêu cầu HTTP", "M4 5h15l-3-3 2-2 6 6-6 6-2-2 3-3H4z M20 19H5l3 3-2 2-6-6 6-6 2 2-3 3h15z", createRequestsPage()),
+                    createIconTab("Nhật ký", "M4 4h2v2H4z M9 4h12v2H9z M4 11h2v2H4z M9 11h12v2H9z M4 18h2v2H4z M9 18h12v2H9z", createLogPage()),
+                    createIconTab("Tệp & tài nguyên", "M3 5a2 2 0 0 1 2-2h6l2 2h6a2 2 0 0 1 2 2v1H8a3 3 0 0 0-2.7 1.7L3 16z M8 10h13l-3 9a2 2 0 0 1-2 1H5a2 2 0 0 1-1.9-2.6l2.8-6.2A2 2 0 0 1 8 10z", createEndpointsPage()));
             if (launchMode == LaunchMode.COMBINED) {
-                mainTabs.getTabs().add(createTab("HTTP Client", createHttpTestPage()));
+                mainTabs.getTabs().add(createIconTab("HTTP Client",
+                        "M3 4h18v13H3z M8 21h8v-2H8z M7 8h10v2H7z M7 12h7v2H7z",
+                        createHttpTestPage()));
             }
         }
         mainTabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
@@ -400,7 +417,7 @@ public class MainView {
     }
 
     private Node createDashboard() {
-        VBox heading = pageTitle("◉  Tổng quan máy chủ",
+        VBox heading = pageTitle("Tổng quan máy chủ",
                 "Theo dõi kết nối TCP, request HTTP và thao tác tệp từ các máy khách.");
 
         dashboardServerStatus = new Label("●  STOPPED");
@@ -417,7 +434,7 @@ public class MainView {
         serverUptimeLabel.setStyle("-fx-text-fill: #748197; -fx-font-size: 11px;");
         dashboardHealthStatus = new Label("Chưa kiểm tra health endpoint");
         dashboardHealthStatus.setStyle("-fx-text-fill: #748197; -fx-font-size: 11px;");
-        Button checkHealth = secondaryButton("◉  Kiểm tra health");
+        Button checkHealth = secondaryButton("Kiểm tra trạng thái");
         checkHealth.setTooltip(new javafx.scene.control.Tooltip(
                 "Gửi GET /__health đến server đang chạy."));
         checkHealth.setOnAction(event -> {
@@ -429,7 +446,7 @@ public class MainView {
             }
             runServerHealthCheck();
         });
-        Button copyAddress = secondaryButton("⧉  Copy URL");
+        Button copyAddress = secondaryButton("Sao chép URL");
         copyAddress.setTooltip(new javafx.scene.control.Tooltip(
                 "Sao chép địa chỉ LAN để gửi cho Client hoặc mở trên thiết bị khác."));
         copyAddress.setOnAction(event -> copyServerAddress());
@@ -445,17 +462,17 @@ public class MainView {
         statusCard.setStyle(CARD_STYLE);
 
         HBox metrics = new HBox(10,
-                metricCard("⇄  TỔNG REQUEST", requestCountLabel),
-                metricCard("↗  REQUEST / GIÂY", rateLabel),
-                metricCard("✓  THÀNH CÔNG", successLabel),
-                metricCard("◷  ĐỘ TRỄ TRUNG BÌNH", latencyLabel),
-                metricCard("⇵  RESPONSE DATA", transferLabel));
+                metricCard("TỔNG REQUEST", requestCountLabel),
+                metricCard("REQUEST / GIÂY", rateLabel),
+                metricCard("TỶ LỆ THÀNH CÔNG", successLabel),
+                metricCard("ĐỘ TRỄ TRUNG BÌNH", latencyLabel),
+                metricCard("DỮ LIỆU PHẢN HỒI", transferLabel));
         for (Node metric : metrics.getChildren()) {
             HBox.setHgrow(metric, Priority.ALWAYS);
         }
 
-        Label recentTitle = sectionTitle("⇄  REQUEST GẦN ĐÂY");
-        Button viewAll = secondaryButton("☷  Xem nhật ký request");
+        Label recentTitle = sectionTitle("REQUEST GẦN ĐÂY");
+        Button viewAll = secondaryButton("Xem toàn bộ request");
         viewAll.setOnAction(event -> selectTab(1));
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -478,20 +495,20 @@ public class MainView {
     }
 
     private Node createRequestsPage() {
-        VBox heading = pageTitle("⇄  Yêu cầu HTTP",
+        VBox heading = pageTitle("Yêu cầu HTTP",
                 "Theo dõi từng request từ TCP client, status response, độ trễ và dữ liệu trả về.");
         requestTable = createRequestTable();
         filteredRequests = new FilteredList<>(requests, request -> true);
         requestTable.setItems(filteredRequests);
         requestSearchField = new TextField();
-        requestSearchField.setPromptText("⌕  Lọc theo method, path, status hoặc client IP");
+        requestSearchField.setPromptText("Lọc theo method, đường dẫn, trạng thái hoặc IP client");
         requestSearchField.setPrefWidth(390);
         requestSearchField.textProperty().addListener((observable, previous, value) ->
                 filterRequests(value));
         requestFilterSummary = new Label();
         requestFilterSummary.setStyle("-fx-text-fill: #748197; -fx-font-size: 11px;");
         filterRequests("");
-        Button clearHistory = secondaryButton("×  Xóa lịch sử phiên");
+        Button clearHistory = secondaryButton("Xóa lịch sử phiên");
         clearHistory.setTooltip(new javafx.scene.control.Tooltip(
                 "Xóa các request đang hiển thị; không xóa audit log đã lưu trên đĩa."));
         clearHistory.setOnAction(event -> {
@@ -509,7 +526,7 @@ public class MainView {
     }
 
     private Node createLogPage() {
-        VBox heading = pageTitle("≡  Nhật ký máy chủ",
+        VBox heading = pageTitle("Nhật ký máy chủ",
                 "Luồng TCP accept, HTTP request line, headers an toàn và kết quả xử lý theo thời gian thực.");
         serverLog = new TextArea();
         serverLog.setEditable(false);
@@ -517,9 +534,9 @@ public class MainView {
         serverLog.setStyle("-fx-control-inner-background: #101827; -fx-text-fill: #c7d2e5; "
                 + "-fx-font-family: 'Consolas'; -fx-font-size: 12px;");
         VBox.setVgrow(serverLog, Priority.ALWAYS);
-        Button exportLog = secondaryButton("⇩  Xuất log…");
+        Button exportLog = secondaryButton("Xuất nhật ký…");
         exportLog.setOnAction(event -> exportServerLog());
-        Button clearLog = secondaryButton("×  Xóa log màn hình");
+        Button clearLog = secondaryButton("Xóa log màn hình");
         clearLog.setTooltip(new javafx.scene.control.Tooltip(
                 "Xóa nội dung log đang hiển thị; không xóa audit đã lưu trên đĩa."));
         clearLog.setOnAction(event -> serverLog.clear());
@@ -539,9 +556,9 @@ public class MainView {
     }
 
     private Node createEndpointsPage() {
-        VBox heading = pageTitle("▣  Tài nguyên máy chủ",
+        VBox heading = pageTitle("Tài nguyên máy chủ",
                 "Quản lý tài nguyên trong document root và uploads. Chọn file để xem MIME, dung lượng và URL HTTP.");
-        Button refresh = secondaryButton("↻  Làm mới danh sách");
+        Button refresh = secondaryButton("Làm mới danh sách");
         refresh.setOnAction(event -> refreshEndpoints());
         endpointTable = new TableView<>();
         endpointTable.setItems(endpoints);
@@ -551,6 +568,11 @@ public class MainView {
                 endpointColumn("ĐỊNH DẠNG / MIME", 220, EndpointInfo::getType),
                 endpointColumn("DUNG LƯỢNG", 110, EndpointInfo::getSize),
                 endpointColumn("SỬA ĐỔI", 150, EndpointInfo::getModified)));
+        endpointTable.setFixedCellSize(40);
+        endpointTable.setStyle("-fx-background-color: white; -fx-background-radius: 9; "
+                + "-fx-border-color: #e5eaf1; -fx-border-radius: 9; "
+                + "-fx-table-cell-border-color: #edf1f5; -fx-selection-bar: #dbeafe; "
+                + "-fx-selection-bar-non-focused: #e8eef7;");
         Label fileDetails = new Label(
                 "Chọn một tệp để xem thông tin nhận dạng và đường dẫn HTTP.");
         fileDetails.setWrapText(true);
@@ -584,7 +606,7 @@ public class MainView {
         });
         endpointTable.setPlaceholder(new Label("Không tìm thấy file trong document root."));
         Label inboxCaption = sectionTitle("TỆP NHẬN TỪ CLIENT VÀ TỆP CHIA SẺ");
-        Button copyFileUrl = secondaryButton("⧉  Copy URL");
+        Button copyFileUrl = secondaryButton("Sao chép URL");
         copyFileUrl.setDisable(true);
         copyFileUrl.setOnAction(event -> {
             EndpointInfo selected = endpointTable.getSelectionModel().getSelectedItem();
@@ -613,37 +635,56 @@ public class MainView {
     }
 
     private Node createHttpTestPage() {
-        VBox heading = pageTitle("Trình duyệt HTTP Client",
-                "Nhập URL đầy đủ, chọn GET, POST hoặc HEAD; xem trang HTML và thông tin response.");
-        methodBox = new ComboBox<>(FXCollections.observableArrayList(
-                "GET", "POST", "HEAD"));
-        methodBox.getSelectionModel().select("GET");
-        methodBox.setPrefWidth(105);
-        methodBox.setTooltip(new javafx.scene.control.Tooltip(
-                "GET tải trang; POST gửi body biểu mẫu; HEAD chỉ nhận headers và metadata."));
+        VBox heading = pageTitle("Trình duyệt HTTP",
+                "Kiểm tra phản hồi HTTP và phân tích trang HTML.");
+        ToggleGroup methodGroup = new ToggleGroup();
+        ToggleButton getMethodButton = methodToggle("GET", methodGroup);
+        ToggleButton postMethodButton = methodToggle("POST", methodGroup);
+        ToggleButton headMethodButton = methodToggle("HEAD", methodGroup);
+        getMethodButton.setSelected(true);
+        Label methodHelp = new Label("GET tải trang và phân tích HTML.");
+        methodHelp.setWrapText(true);
+        methodHelp.setMinWidth(205);
+        methodHelp.setStyle("-fx-background-color: #f1f5f9; -fx-text-fill: #526176; "
+                + "-fx-background-radius: 8; -fx-padding: 8 11; -fx-font-size: 11px;");
+        Region methodSpacer = new Region();
+        HBox.setHgrow(methodSpacer, Priority.ALWAYS);
+        HBox methodSelector = new HBox(8, getMethodButton, postMethodButton,
+                headMethodButton, methodSpacer, methodHelp);
+        methodSelector.setAlignment(Pos.CENTER_LEFT);
+        methodSelector.setPadding(new Insets(3, 0, 3, 0));
         urlField = new TextField();
-        urlField.setPromptText("URL đầy đủ, ví dụ https://example.com/ hoặc http://192.168.1.25:8080/");
+        urlField.setPromptText("Nhập URL, ví dụ https://example.com/");
+        urlField.setPrefHeight(48);
+        urlField.setTooltip(new javafx.scene.control.Tooltip(
+                "Nhập URL đầy đủ của tài nguyên cần gửi request HTTP."));
         urlField.setOnAction(event -> sendRequest());
         sendButton = primaryButton("Gửi request");
+        sendButton.setGraphic(svgIcon(
+                "M2 3 22 12 2 21l3-8 11-1-11-1z",
+                15, "#ffffff"));
+        sendButton.setPrefHeight(48);
+        sendButton.setMinWidth(150);
         sendButton.setOnAction(event -> sendRequest());
         HBox.setHgrow(urlField, Priority.ALWAYS);
-        HBox requestBar = new HBox(8, methodBox, urlField, sendButton);
-        requestBar.setAlignment(Pos.CENTER_LEFT);
-        requestBar.setPadding(new Insets(12));
+        HBox urlRow = new HBox(10, urlField, sendButton);
+        urlRow.setAlignment(Pos.CENTER_LEFT);
+        HBox requestTitle = new HBox(9,
+                svgIcon("M3 4h18v13H3z M8 21h8v-2H8z M7 8h10v2H7z M7 12h7v2H7z",
+                        16, "#2563eb"),
+                sectionTitle("TẠO YÊU CẦU HTTP"));
+        requestTitle.setAlignment(Pos.CENTER_LEFT);
+        VBox requestBar = new VBox(12,
+                requestTitle, fieldCaption("PHƯƠNG THỨC"), methodSelector,
+                new javafx.scene.control.Separator(),
+                fieldCaption("URL ĐÍCH"), urlRow);
+        requestBar.setPadding(new Insets(19));
         requestBar.setStyle(CARD_STYLE);
         writeTokenField = new PasswordField();
         visibleWriteTokenField = new TextField();
-        writeTokenField.setPromptText("Token Bearer nếu server đích yêu cầu");
+        writeTokenField.setPromptText("Bearer token nếu máy chủ yêu cầu");
         visibleWriteTokenField.setPromptText(writeTokenField.getPromptText());
-        writeTokenField.setPromptText("Dán Bearer token do máy Server cung cấp");
-        Label tokenHint = new Label(
-                "POST / PUT / DELETE và xem audit cần token; GET nội dung thông thường vẫn công khai.");
-        tokenHint.setWrapText(true);
-        tokenHint.setStyle("-fx-text-fill: #858da1; -fx-font-size: 11px;");
-        tokenHint.setText("Lấy token ở tab Server sau khi Start, hoặc dòng WRITE_TOKEN khi chạy "
-                + "run-server.bat. Dán mã tại đây. Cần token cho POST/PUT/DELETE và audit; "
-                + "GET nội dung công khai không cần.");
-        HBox tokenRow = new HBox(10, fieldCaption("QUYỀN GHI"), writeTokenField);
+        HBox tokenRow = new HBox(12, fieldCaption("BEARER TOKEN"), writeTokenField);
         tokenRow.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(writeTokenField, Priority.ALWAYS);
         HBox.setHgrow(visibleWriteTokenField, Priority.ALWAYS);
@@ -662,36 +703,71 @@ public class MainView {
             }
         });
         tokenRow.getChildren().add(revealTokenButton);
+        TitledPane authPane = new TitledPane("Xác thực tùy chọn", tokenRow);
+        authPane.setGraphic(svgIcon("M12 2 4 5v6c0 5 3 9 8 11 5-2 8-6 8-11V5z M9 12l2 2 4-5",
+                15, "#64748b"));
+        authPane.setExpanded(false);
+        authPane.setAnimated(false);
+        authPane.setStyle("-fx-text-fill: #475569; -fx-font-size: 12px; "
+                + "-fx-background-color: white; -fx-background-radius: 9; "
+                + "-fx-border-color: #e2e8f0; -fx-border-radius: 9;");
 
         requestBodyArea = new TextArea();
         requestBodyArea.setPromptText("name=Student&message=Hello%20server");
         requestBodyArea.setPrefRowCount(3);
         requestBodyArea.setWrapText(true);
         requestBodyArea.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 12px;");
-        Label requestBodyCaption = fieldCaption("POST BODY · APPLICATION/X-WWW-FORM-URLENCODED");
+        Label requestBodyCaption = fieldCaption("NỘI DUNG POST");
         Label requestBodyHint = new Label(
-                "Body được gửi sau dòng trống của HTTP request; server phân tích và trả về trang HTML.");
+                "Gửi body theo dạng application/x-www-form-urlencoded.");
         requestBodyHint.setStyle("-fx-text-fill: #858da1; -fx-font-size: 11px;");
         VBox postBodyCard = new VBox(8, requestBodyCaption, requestBodyArea, requestBodyHint);
         postBodyCard.setPadding(new Insets(13));
         postBodyCard.setStyle(CARD_STYLE);
         postBodyCard.setVisible(false);
         postBodyCard.setManaged(false);
-        methodBox.setOnAction(event -> {
-            boolean hasBody = "POST".equals(methodBox.getValue());
+        Runnable updateMethodSelection = () -> {
+            boolean hasBody = "POST".equals(selectedHttpMethod);
             postBodyCard.setVisible(hasBody);
             postBodyCard.setManaged(hasBody);
-            if ("POST".equals(methodBox.getValue())) {
-                requestBodyCaption.setText("POST BODY · APPLICATION/X-WWW-FORM-URLENCODED");
-                requestBodyHint.setText(
-                        "Body form URL-encoded được gửi đến đúng URL bạn nhập; server đích quyết định cách xử lý.");
+            methodHelp.setText("GET".equals(selectedHttpMethod)
+                    ? "GET tải trang và phân tích HTML."
+                    : hasBody ? "POST gửi body và phân tích HTML phản hồi."
+                            : "HEAD chỉ lấy status và metadata tài nguyên.");
+            String methodTint = "GET".equals(selectedHttpMethod) ? "#eff6ff"
+                    : hasBody ? "#f5f3ff" : "#ecfeff";
+            String methodInk = "GET".equals(selectedHttpMethod) ? "#1d4ed8"
+                    : hasBody ? "#6d28d9" : "#0e7490";
+            methodHelp.setStyle("-fx-background-color: " + methodTint
+                    + "; -fx-text-fill: " + methodInk
+                    + "; -fx-background-radius: 8; -fx-padding: 8 11; -fx-font-size: 11px;");
+            if (hasBody) {
                 if (requestBodyArea.getText().isBlank()) {
                     requestBodyArea.setText("name=Student&message=Hello%20server");
                 }
             }
+            styleMethodButton(getMethodButton, selectedHttpMethod);
+            styleMethodButton(postMethodButton, selectedHttpMethod);
+            styleMethodButton(headMethodButton, selectedHttpMethod);
+        };
+        getMethodButton.setOnAction(event -> {
+            if (!getMethodButton.isSelected()) getMethodButton.setSelected(true);
+            selectedHttpMethod = "GET";
+            updateMethodSelection.run();
         });
+        postMethodButton.setOnAction(event -> {
+            if (!postMethodButton.isSelected()) postMethodButton.setSelected(true);
+            selectedHttpMethod = "POST";
+            updateMethodSelection.run();
+        });
+        headMethodButton.setOnAction(event -> {
+            if (!headMethodButton.isSelected()) headMethodButton.setSelected(true);
+            selectedHttpMethod = "HEAD";
+            updateMethodSelection.run();
+        });
+        updateMethodSelection.run();
 
-        chooseUploadButton = secondaryButton("Chọn tệp…");
+        chooseUploadButton = secondaryButton("Chọn tệp");
         chooseUploadButton.setOnAction(event -> chooseUploadFile());
         uploadSummaryLabel = new Label("Đính kèm tệp như email · tối đa 50 MB mỗi tệp");
         uploadSummaryLabel.setStyle("-fx-text-fill: #68738a; -fx-font-size: 11px;");
@@ -703,7 +779,8 @@ public class MainView {
         transferMethodBox.getSelectionModel().select("POST");
         transferMethodBox.setTooltip(new javafx.scene.control.Tooltip(
                 "POST tạo tệp mới; PUT tạo mới hoặc thay thế tệp cùng tên trong /uploads."));
-        uploadButton = primaryButton("Gửi tệp lên máy chủ  ↑");
+        uploadButton = primaryButton("Tải tệp lên");
+        uploadButton.setGraphic(svgIcon("M10 22h4v-9h5l-7-8-7 8h5z", 15, "#ffffff"));
         uploadButton.setOnAction(event -> uploadSelectedFile());
         HBox composeToolbar = new HBox(10,
                 fieldCaption("PHƯƠNG THỨC"), transferMethodBox,
@@ -721,11 +798,14 @@ public class MainView {
         uploadBar.setPadding(new Insets(14));
         uploadBar.setStyle(CARD_STYLE);
 
-        statusBadge = new Label("READY");
+        statusBadge = new Label("Sẵn sàng");
         statusBadge.setStyle(badgeStyle("#e9ecf4", "#626b80"));
-        responseMeta = new Label("Nhập URL máy chủ để mở trang");
+        responseMeta = new Label("Nhập URL để bắt đầu");
         responseMeta.setStyle("-fx-text-fill: #858da1;");
-        saveResponseButton = secondaryButton("↓  Lưu response");
+        saveResponseButton = secondaryButton("Lưu phản hồi");
+        saveResponseButton.setGraphic(svgIcon(
+                "M10 2h4v9h4l-6 6-6-6h4z M4 19h16v3H4z",
+                15, "#2563eb"));
         saveResponseButton.setDisable(true);
         saveResponseButton.setOnAction(event -> saveResponseToFile());
         Region responseSpacer = new Region();
@@ -733,6 +813,8 @@ public class MainView {
         HBox responseHeader = new HBox(12, statusBadge, responseMeta, responseSpacer,
                 saveResponseButton);
         responseHeader.setAlignment(Pos.CENTER_LEFT);
+        responseHeader.setPadding(new Insets(10, 13, 10, 13));
+        responseHeader.setStyle(CARD_STYLE);
 
         webView = new WebView();
         webView.setContextMenuEnabled(true);
@@ -751,8 +833,7 @@ public class MainView {
         headerArea = readOnlyTextArea();
         bodyArea = readOnlyTextArea();
         htmlAnalysisLabel = new Label(
-                "GET/POST: nhận HTML, độ dài theo byte/ký tự UTF-16 và số thẻ p, div, span, img. "
-                        + "HEAD: chỉ nhận metadata trong response headers.");
+                "GET và POST phân tích nội dung HTML; HEAD hiển thị thông tin tài nguyên.");
         htmlAnalysisLabel.setWrapText(true);
         htmlAnalysisLabel.setPadding(new Insets(10));
         htmlAnalysisLabel.setStyle("-fx-background-color: #f1f7f9; -fx-text-fill: #31566a; "
@@ -761,18 +842,19 @@ public class MainView {
         previewContent.setPadding(new Insets(10));
         VBox.setVgrow(webView, Priority.ALWAYS);
         TabPane resultTabs = new TabPane(
-                createTab("Browser & phân tích HTML", previewContent),
-                createTab("HTTP headers", headerArea),
-                createTab("Response body", bodyArea),
-                createTab("Hoạt động Client", createClientActivityTable()));
+                createIconTab("Trang & phân tích", "M3 4h18v13H3z M8 21h8v-2H8z M7 8h10v2H7z M7 12h7v2H7z", previewContent),
+                createIconTab("Headers", "M5 3h14v18H5z M8 7h8v2H8z M8 11h8v2H8z M8 15h5v2H8z", headerArea),
+                createIconTab("Nội dung", "M5 3h14v18H5z M8 7h8v2H8z M8 11h8v2H8z M8 15h8v2H8z", bodyArea),
+                createIconTab("Lịch sử", "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 5v5l4 2-1 2-5-3V7z", createClientActivityTable()),
+                createIconTab("Tệp & tải lên", "M3 5a2 2 0 0 1 2-2h6l2 2h6a2 2 0 0 1 2 2v1H8a3 3 0 0 0-2.7 1.7L3 16z M8 10h13l-3 9a2 2 0 0 1-2 1H5a2 2 0 0 1-1.9-2.6l2.8-6.2A2 2 0 0 1 8 10z", uploadBar));
         VBox.setVgrow(resultTabs, Priority.ALWAYS);
 
         VBox browserCard = new VBox(resultTabs);
         browserCard.setPadding(new Insets(1));
         browserCard.setStyle(CARD_STYLE);
-        VBox requestComposer = new VBox(9, requestBar, tokenRow, tokenHint, postBodyCard);
-        VBox content = new VBox(14, heading, requestComposer, uploadBar, responseHeader, browserCard);
-        content.setPadding(new Insets(19));
+        VBox requestComposer = new VBox(10, requestBar, authPane, postBodyCard);
+        VBox content = new VBox(16, heading, requestComposer, responseHeader, browserCard);
+        content.setPadding(new Insets(22));
         VBox.setVgrow(browserCard, Priority.ALWAYS);
         VBox.setVgrow(resultTabs, Priority.ALWAYS);
         webView.getEngine().load("about:blank");
@@ -808,22 +890,20 @@ public class MainView {
             updateServerUptime();
             serverTokenDisplay.setText(server.getWriteToken());
             String lanAddress = HttpServerCore.getLanAddress();
-            String connectUrl = lanAddress == null
-                    ? "Không tìm thấy IP LAN"
+            String loopbackUrl = "http://127.0.0.1:" + server.getPort() + "/";
+            String lanUrl = lanAddress == null ? null
                     : "http://" + lanAddress + ":" + server.getPort() + "/";
-            addressBadge.setText(lanAddress == null ? "IP LAN UNAVAILABLE" : connectUrl);
-            connectAddressLabel.setText(lanAddress == null
-                    ? "Không thấy IPv4 LAN. Kết nối Wi-Fi/Ethernet rồi thử lại."
-                    : connectUrl);
-            connectionHelpLabel.setText(lanAddress == null
-                    ? "Kết nối Wi-Fi/Ethernet và thử khởi động server lại."
-                    : "Gửi URL này và token quyền ghi cho client đáng tin cậy. "
-                            + "Nếu bị chặn, cho phép java.exe qua Windows Firewall.");
+            addressBadge.setText(loopbackUrl);
+            connectAddressLabel.setText(lanUrl == null
+                    ? "Máy này: " + loopbackUrl + "  ·  Không tìm thấy IP LAN."
+                    : "Máy này: " + loopbackUrl + "\nMáy khác cùng mạng: " + lanUrl);
+            connectionHelpLabel.setText("Nếu mở trên máy khác, dùng URL LAN và cho phép "
+                    + "java.exe qua Windows Firewall nếu được hỏi.");
             if (urlField != null && lanAddress != null
                     && (urlField.getText().isEmpty()
                             || urlField.getText().contains("localhost")
                             || urlField.getText().contains("127.0.0.1"))) {
-                urlField.setText(connectUrl);
+                urlField.setText(loopbackUrl);
             }
             serverState.setText("●  RUNNING");
             serverState.setStyle(stateStyle(true));
@@ -991,11 +1071,7 @@ public class MainView {
             showInfo("Server chưa chạy", "Chọn chế độ Server rồi nhấn Start server trước.");
             return;
         }
-        String address = connectAddressLabel.getText();
-        if (!address.startsWith("http://")) {
-            showInfo("Chưa có địa chỉ IP LAN", address);
-            return;
-        }
+        String address = serverUrl("/");
         ClipboardContent content = new ClipboardContent();
         content.putString(address);
         Clipboard.getSystemClipboard().setContent(content);
@@ -1098,7 +1174,7 @@ public class MainView {
             url = "http://" + url;
             urlField.setText(url);
         }
-        String method = methodBox.getValue();
+        String method = selectedHttpMethod;
         if (url.isEmpty()) {
             showResponseError("Nhập địa chỉ IP hoặc URL của máy chủ trước khi kết nối.");
             return;
@@ -1435,7 +1511,7 @@ public class MainView {
         }
         headerArea.setText(formattedHeaders.toString());
         String normalizedContentType = contentType.toLowerCase(Locale.ROOT);
-        if ("HEAD".equals(methodBox.getValue())) {
+        if ("HEAD".equals(selectedHttpMethod)) {
             htmlAnalysisLabel.setText("HEAD RESOURCE · " + response.statusLine
                     + "  ·  Content-Type: " + headerValue(response.headers, "Content-Type")
                     + "  ·  Content-Length: " + headerValue(response.headers, "Content-Length")
@@ -1443,7 +1519,7 @@ public class MainView {
                     + "  ·  Server: " + headerValue(response.headers, "Server")
                     + "  ·  ETag: " + headerValue(response.headers, "ETag")
                     + "  ·  response không có body. Headers đầy đủ ở tab HTTP headers.");
-        } else if (normalizedContentType.contains("text/html")) {
+        } else if (isHtmlResponse(normalizedContentType, response.body)) {
             htmlAnalysisLabel.setText(analyzeHtml(response.body, response.bodyBytes.length));
         } else {
             htmlAnalysisLabel.setText("Response không phải HTML · " + contentType
@@ -1469,7 +1545,7 @@ public class MainView {
         } else {
             bodyArea.setText(response.body);
             lastClientLoadedUrl = urlField.getText();
-            if (normalizedContentType.contains("text/html")) {
+            if (isHtmlResponse(normalizedContentType, response.body)) {
                 webView.getEngine().loadContent(
                         addBaseUrl(response.body, urlField.getText()), "text/html");
             } else {
@@ -1497,6 +1573,15 @@ public class MainView {
         } catch (Exception e) {
             return html;
         }
+    }
+
+    private boolean isHtmlResponse(String contentType, String body) {
+        if (contentType.contains("text/html") || contentType.contains("application/xhtml+xml")) {
+            return true;
+        }
+        return body != null && java.util.regex.Pattern.compile(
+                "(?is)<\\s*(?:!doctype\\s+html|html|head|body|p|div|span|img)(?:\\s|/?>)")
+                .matcher(body).find();
     }
 
     private String analyzeHtml(String html, int byteLength) {
@@ -1758,10 +1843,9 @@ public class MainView {
         table.setItems(requests);
         table.getColumns().setAll(java.util.Arrays.asList(
                 requestColumn("THỜI GIAN", 100, request -> request.time),
-                requestColumn("METHOD", 90, request -> request.method),
+                methodColumn(),
                 requestColumn("ĐƯỜNG DẪN HTTP", 250, request -> request.path),
-                requestColumn("STATUS", 120, request -> request.statusCode + " "
-                        + reasonPhrase(request.statusCode)),
+                statusColumn(),
                 requestColumn("ĐỘ TRỄ", 100, request -> request.durationMillis + " ms"),
                 requestColumn("DỮ LIỆU", 100, request -> formatBytes(request.bytes)),
                 requestColumn("CLIENT IP", 145, request -> displayClientAddress(request.clientAddress))));
@@ -1772,24 +1856,95 @@ public class MainView {
                 super.updateItem(item, empty);
                 if (empty || item == null) {
                     setStyle("");
-                } else if (item.statusCode >= 200 && item.statusCode < 300) {
-                    setStyle("-fx-text-background-color: #176b4a;");
-                } else if (item.statusCode >= 400) {
-                    setStyle("-fx-text-background-color: #b93838;");
                 } else {
-                    setStyle("-fx-text-background-color: #344459;");
+                    setStyle(getIndex() % 2 == 0
+                            ? "-fx-background-color: #ffffff; -fx-border-color: transparent transparent #edf1f6 transparent;"
+                            : "-fx-background-color: #f8fafd; -fx-border-color: transparent transparent #edf1f6 transparent;");
                 }
             }
         });
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        table.setStyle("-fx-background-color: white; -fx-background-radius: 10;");
+        table.setFixedCellSize(40);
+        table.setStyle("-fx-background-color: white; -fx-background-radius: 9; "
+                + "-fx-border-color: #e5eaf1; -fx-border-radius: 9; "
+                + "-fx-table-cell-border-color: #edf1f5; -fx-selection-bar: #dbeafe; "
+                + "-fx-selection-bar-non-focused: #e8eef7; -fx-font-size: 12px;");
         return table;
+    }
+
+    private TableColumn<HttpServerCore.RequestInfo, String> methodColumn() {
+        TableColumn<HttpServerCore.RequestInfo, String> column = new TableColumn<>();
+        setColumnHeader(column, "METHOD", "M5 3h14v3H5z M10 8h4v8h5l-7 7-7-7h5z");
+        column.setPrefWidth(105);
+        column.setCellValueFactory(cell ->
+                new javafx.beans.property.ReadOnlyStringWrapper(cell.getValue().method));
+        column.setCellFactory(ignored -> new javafx.scene.control.TableCell<>() {
+            @Override
+            protected void updateItem(String method, boolean empty) {
+                super.updateItem(method, empty);
+                if (empty || method == null) {
+                    setGraphic(null);
+                    setText(null);
+                    return;
+                }
+                String color = "GET".equals(method) ? "#2563eb"
+                        : "POST".equals(method) ? "#7c3aed"
+                        : "HEAD".equals(method) ? "#b45309" : "#475569";
+                String background = "GET".equals(method) ? "#eff6ff"
+                        : "POST".equals(method) ? "#f5f3ff"
+                        : "HEAD".equals(method) ? "#fffbeb" : "#f1f5f9";
+                Label badge = new Label(method);
+                badge.setStyle("-fx-background-color: " + background + "; -fx-text-fill: " + color
+                        + "; -fx-padding: 4 9; -fx-background-radius: 6; -fx-font-size: 10px; "
+                        + "-fx-font-weight: bold; -fx-font-family: 'Segoe UI';");
+                setGraphic(badge);
+                setText(null);
+                setAlignment(Pos.CENTER_LEFT);
+            }
+        });
+        return column;
+    }
+
+    private TableColumn<HttpServerCore.RequestInfo, String> statusColumn() {
+        TableColumn<HttpServerCore.RequestInfo, String> column = new TableColumn<>();
+        setColumnHeader(column, "STATUS", "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1 14-4-4 2-2 2 2 5-5 2 2z");
+        column.setPrefWidth(125);
+        column.setCellValueFactory(cell -> new javafx.beans.property.ReadOnlyStringWrapper(
+                cell.getValue().statusCode + " " + reasonPhrase(cell.getValue().statusCode)));
+        column.setCellFactory(ignored -> new javafx.scene.control.TableCell<>() {
+            @Override
+            protected void updateItem(String status, boolean empty) {
+                super.updateItem(status, empty);
+                if (empty || status == null) {
+                    setGraphic(null);
+                    setText(null);
+                    return;
+                }
+                int code;
+                try {
+                    code = Integer.parseInt(status.substring(0, 3));
+                } catch (NumberFormatException | IndexOutOfBoundsException ignored) {
+                    code = 0;
+                }
+                boolean good = code >= 200 && code < 400;
+                Label badge = new Label(status);
+                badge.setStyle("-fx-background-color: " + (good ? "#ecfdf3" : "#fff1f2")
+                        + "; -fx-text-fill: " + (good ? "#15803d" : "#be123c")
+                        + "; -fx-padding: 4 9; -fx-background-radius: 6; -fx-font-size: 10px; "
+                        + "-fx-font-weight: bold; -fx-font-family: 'Segoe UI';");
+                setGraphic(badge);
+                setText(null);
+                setAlignment(Pos.CENTER_LEFT);
+            }
+        });
+        return column;
     }
 
     private TableColumn<HttpServerCore.RequestInfo, String> requestColumn(String title, double width,
             java.util.function.Function<HttpServerCore.RequestInfo, String> getter) {
         TableColumn<HttpServerCore.RequestInfo, String> column = new TableColumn<>(title);
         column.setPrefWidth(width);
+        setColumnHeader(column, title, columnIcon(title));
         column.setCellValueFactory(cell ->
                 new javafx.beans.property.ReadOnlyStringWrapper(getter.apply(cell.getValue())));
         return column;
@@ -1822,7 +1977,11 @@ public class MainView {
                 clientActivityColumn("DỮ LIỆU", 110, activity -> formatBytes(activity.bytes))));
         clientActivityTable.setPlaceholder(new Label("Chưa có giao dịch HTTP từ Client."));
         clientActivityTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        clientActivityTable.setStyle("-fx-background-color: white; -fx-background-radius: 10;");
+        clientActivityTable.setFixedCellSize(40);
+        clientActivityTable.setStyle("-fx-background-color: white; -fx-background-radius: 9; "
+                + "-fx-border-color: #e5eaf1; -fx-border-radius: 9; "
+                + "-fx-table-cell-border-color: #edf1f5; -fx-selection-bar: #dbeafe; "
+                + "-fx-selection-bar-non-focused: #e8eef7;");
         return clientActivityTable;
     }
 
@@ -1830,6 +1989,7 @@ public class MainView {
             java.util.function.Function<ClientActivity, String> getter) {
         TableColumn<ClientActivity, String> column = new TableColumn<>(title);
         column.setPrefWidth(width);
+        setColumnHeader(column, title, columnIcon(title));
         column.setCellValueFactory(cell ->
                 new javafx.beans.property.ReadOnlyStringWrapper(getter.apply(cell.getValue())));
         return column;
@@ -1856,6 +2016,7 @@ public class MainView {
             java.util.function.Function<EndpointInfo, String> getter) {
         TableColumn<EndpointInfo, String> column = new TableColumn<>(title);
         column.setPrefWidth(width);
+        setColumnHeader(column, title, columnIcon(title));
         column.setCellValueFactory(cell ->
                 new javafx.beans.property.ReadOnlyStringWrapper(getter.apply(cell.getValue())));
         return column;
@@ -1867,6 +2028,195 @@ public class MainView {
         return tab;
     }
 
+    private Tab createIconTab(String title, String path, Node content) {
+        StackPane icon = new StackPane(svgIcon(path, 15, "#16728b"));
+        icon.setMinSize(25, 25);
+        icon.setPrefSize(25, 25);
+        icon.setMaxSize(25, 25);
+        icon.setStyle("-fx-background-color: #e8f4f7; -fx-background-radius: 7;");
+        Tab tab = new Tab(title, content);
+        tab.setGraphic(icon);
+        tab.setClosable(false);
+        return tab;
+    }
+
+    private Node svgIcon(String path, double size, String color) {
+        SVGPath shape = new SVGPath();
+        shape.setContent(path);
+        shape.setFill(javafx.scene.paint.Color.web(color));
+        shape.setScaleX(size / 24.0);
+        shape.setScaleY(size / 24.0);
+        return shape;
+    }
+
+    private String methodIconPath(String method) {
+        if ("POST".equals(method)) {
+            return "M10 22h4v-9h5l-7-8-7 8h5z";
+        }
+        if ("HEAD".equals(method)) {
+            return "M12 4C6 4 2 12 2 12s4 8 10 8 10-8 10-8-4-8-10-8zm0 13a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-3a2 2 0 1 0 0-4 2 2 0 0 0 0 4z";
+        }
+        return "M10 2h4v9h5l-7 8-7-8h5z";
+    }
+
+    private ToggleButton methodToggle(String method, ToggleGroup group) {
+        ToggleButton button = new ToggleButton(method);
+        button.setToggleGroup(group);
+        button.setGraphic(svgIcon(methodIconPath(method), 16, methodColor(method)));
+        button.setGraphicTextGap(8);
+        button.setAlignment(Pos.CENTER_LEFT);
+        button.setMinWidth(105);
+        button.setPrefHeight(42);
+        button.setTooltip(new javafx.scene.control.Tooltip(
+                "GET tải nội dung; POST gửi dữ liệu; HEAD lấy metadata, không tải body."));
+        button.setAccessibleText("Phương thức HTTP " + method);
+        return button;
+    }
+
+    private void styleMethodButton(ToggleButton button, String selectedMethod) {
+        boolean selected = button.getText().equals(selectedMethod);
+        String accent = methodColor(button.getText());
+        String background = selected ? accent : "#f8fafc";
+        String foreground = selected ? "#ffffff" : "#475569";
+        button.setGraphic(svgIcon(methodIconPath(button.getText()), 16,
+                selected ? "#ffffff" : accent));
+        button.setTextFill(javafx.scene.paint.Color.web(foreground));
+        button.setStyle("-fx-background-color: " + background + "; "
+                + "-fx-border-color: " + (selected ? accent : "#dbe3ed")
+                + "; -fx-border-width: 1; -fx-border-radius: 10; "
+                + "-fx-background-radius: 10; -fx-font-family: 'Segoe UI'; "
+                + "-fx-font-size: 12px; -fx-font-weight: bold; -fx-padding: 10 15; "
+                + "-fx-cursor: hand;"
+                + (selected ? " -fx-effect: dropshadow(gaussian, rgba(37,99,235,0.18), 8, 0, 0, 2);" : ""));
+    }
+
+    private String methodColor(String method) {
+        if ("POST".equals(method)) {
+            return "#7c3aed";
+        }
+        if ("HEAD".equals(method)) {
+            return "#0891b2";
+        }
+        return "#2563eb";
+    }
+
+    private void setColumnHeader(TableColumn<?, ?> column, String title, String path) {
+        Label label = new Label(title);
+        label.setStyle("-fx-text-fill: #475569; -fx-font-size: 10px; -fx-font-weight: bold;");
+        HBox graphic = new HBox(7, svgIcon(path, 12, "#64748b"), label);
+        graphic.setAlignment(Pos.CENTER_LEFT);
+        column.setText("");
+        column.setGraphic(graphic);
+    }
+
+    private String columnIcon(String title) {
+        String normalized = title.toLowerCase(Locale.ROOT);
+        if (normalized.contains("thời gian") || normalized.contains("sửa đổi")) {
+            return "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 5v5l4 2-1 2-5-3V7z";
+        }
+        if (normalized.contains("method")) {
+            return "M5 3h14v3H5z M10 8h4v8h5l-7 7-7-7h5z";
+        }
+        if (normalized.contains("status")) {
+            return "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1 14-4-4 2-2 2 2 5-5 2 2z";
+        }
+        if (normalized.contains("đường dẫn") || normalized.contains("url")) {
+            return "M10 13a5 5 0 0 0 7.1 0l3-3A5 5 0 0 0 13 2.9l-1.7 1.7 1.4 1.4 1.7-1.7a3 3 0 0 1 4.3 4.3l-3 3a3 3 0 0 1-4.3 0z M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7-1.4-1.4-1.7 1.7a3 3 0 0 1-4.3-4.3l3-3a3 3 0 0 1 4.3 0z";
+        }
+        if (normalized.contains("dung lượng") || normalized.contains("dữ liệu")) {
+            return "M4 4h16v16H4z M7 7h10v2H7z M7 11h10v2H7z M7 15h6v2H7z";
+        }
+        if (normalized.contains("client ip")) {
+            return "M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 10a3 3 0 1 1 0-6 3 3 0 0 1 0 6z";
+        }
+        if (normalized.contains("mime") || normalized.contains("định dạng")) {
+            return "M6 2h8l5 5v15H6z M13 3v5h5 M9 12h7 M9 16h7";
+        }
+        return "M4 4h16v16H4z M8 8h8v2H8z M8 12h8v2H8z";
+    }
+
+    private void applyProfessionalTheme() {
+        if (stage == null || stage.getScene() == null) {
+            return;
+        }
+        for (TableView<?> table : new TableView<?>[] {
+                requestTable, clientActivityTable, endpointTable }) {
+            if (table == null) {
+                continue;
+            }
+            table.applyCss();
+            Node header = table.lookup(".column-header-background");
+            if (header != null) {
+                header.setStyle("-fx-background-color: #f3f6fa; "
+                        + "-fx-border-color: transparent transparent #e5eaf1 transparent;");
+            }
+            for (Node columnHeader : table.lookupAll(".column-header")) {
+                columnHeader.setStyle("-fx-background-color: #f3f6fa; "
+                        + "-fx-size: 38px; -fx-border-color: transparent #e8edf3 #e5eaf1 transparent;");
+                for (Node label : columnHeader.lookupAll(".label")) {
+                    label.setStyle("-fx-text-fill: #526176; -fx-font-size: 10px; "
+                            + "-fx-font-weight: bold; -fx-padding: 0 8 0 8;");
+                }
+            }
+            for (Node cell : table.lookupAll(".table-cell")) {
+                cell.setStyle("-fx-font-family: 'Segoe UI'; -fx-font-size: 12px; "
+                        + "-fx-text-fill: #243247; -fx-padding: 0 10 0 10;");
+            }
+        }
+        for (Node field : stage.getScene().getRoot().lookupAll(".text-field")) {
+            field.setStyle("-fx-background-color: #ffffff; -fx-text-fill: #172033; "
+                    + "-fx-prompt-text-fill: #94a3b8; -fx-border-color: #d8e1ec; "
+                    + "-fx-border-radius: 8; -fx-background-radius: 8; -fx-padding: 9 11; "
+                    + "-fx-font-size: 12px;");
+        }
+        for (Node combo : stage.getScene().getRoot().lookupAll(".combo-box-base")) {
+            combo.setStyle("-fx-background-color: #ffffff; -fx-border-color: #d8e1ec; "
+                    + "-fx-border-radius: 8; -fx-background-radius: 8; -fx-padding: 3 7;");
+        }
+        for (Node background : stage.getScene().getRoot().lookupAll(".tab-header-background")) {
+            background.setStyle("-fx-background-color: #eef2f7; "
+                    + "-fx-border-color: transparent transparent #dbe3ed transparent;");
+        }
+        for (Node contentArea : stage.getScene().getRoot().lookupAll(".tab-content-area")) {
+            contentArea.setStyle("-fx-background-color: transparent; -fx-padding: 0;");
+        }
+        for (Node pane : stage.getScene().getRoot().lookupAll(".tab-pane")) {
+            pane.setStyle("-fx-background-color: transparent;");
+        }
+        for (Node pane : stage.getScene().getRoot().lookupAll(".titled-pane")) {
+            Node title = pane.lookup(".title");
+            if (title != null) {
+                title.setStyle("-fx-background-color: #f8fafc; -fx-background-radius: 9; "
+                        + "-fx-border-color: #e2e8f0; -fx-border-radius: 9; -fx-padding: 10 12;");
+            }
+            Node paneContent = pane.lookup(".content");
+            if (paneContent != null) {
+                paneContent.setStyle("-fx-background-color: white; "
+                        + "-fx-border-color: #e2e8f0; -fx-border-radius: 0 0 9 9;");
+            }
+        }
+        for (Node paneNode : stage.getScene().getRoot().lookupAll(".tab-pane")) {
+            if (!(paneNode instanceof TabPane)) {
+                continue;
+            }
+            TabPane tabs = (TabPane) paneNode;
+            Runnable styleTabs = () -> {
+                for (Node tabNode : tabs.lookupAll(".tab")) {
+                    boolean selected = tabNode.getPseudoClassStates().stream()
+                            .anyMatch(state -> "selected".equals(state.getPseudoClassName()));
+                    tabNode.setStyle("-fx-background-color: " + (selected ? "white" : "#f3f6fa")
+                            + "; -fx-background-radius: 9 9 0 0; -fx-padding: 8 13 8 13; "
+                            + "-fx-border-color: transparent transparent "
+                            + (selected ? "#2563eb" : "transparent") + " transparent; "
+                            + "-fx-border-width: 0 0 2 0;");
+                }
+            };
+            tabs.getSelectionModel().selectedIndexProperty().addListener(
+                    (observable, previous, selected) -> Platform.runLater(styleTabs));
+            styleTabs.run();
+        }
+    }
+
     private void selectTab(int index) {
         if (mainTabs != null) {
             mainTabs.getSelectionModel().select(index);
@@ -1876,21 +2226,22 @@ public class MainView {
     private VBox pageTitle(String title, String subtitle) {
         Label heading = new Label(title);
         heading.setFont(Font.font("Segoe UI", FontWeight.BOLD, 21));
+        heading.setStyle("-fx-text-fill: #0f172a;");
         Label description = new Label(subtitle);
-        description.setStyle("-fx-text-fill: #838ba0;");
-        return new VBox(5, heading, description);
+        description.setStyle("-fx-text-fill: #64748b; -fx-font-size: 12px;");
+        return new VBox(6, heading, description);
     }
 
     private Label sectionTitle(String text) {
         Label label = new Label(text);
         label.setFont(Font.font("Segoe UI", FontWeight.BOLD, 11));
-        label.setStyle("-fx-text-fill: #536478; -fx-letter-spacing: 0.8px;");
+        label.setStyle("-fx-text-fill: #334155; -fx-letter-spacing: 0.5px;");
         return label;
     }
 
     private Label fieldCaption(String text) {
         Label label = new Label(text);
-        label.setStyle("-fx-text-fill: #838ba0; -fx-font-size: 10px; -fx-font-weight: bold;");
+        label.setStyle("-fx-text-fill: #64748b; -fx-font-size: 11px; -fx-font-weight: bold;");
         return label;
     }
 
@@ -1903,34 +2254,41 @@ public class MainView {
 
     private VBox metricCard(String title, Label value) {
         Label caption = new Label(title);
-        caption.setStyle("-fx-text-fill: #778398; -fx-font-size: 10px; "
+        caption.setStyle("-fx-text-fill: #64748b; -fx-font-size: 11px; "
                 + "-fx-font-weight: bold;");
         VBox card = new VBox(6, caption, value);
         card.setPadding(new Insets(12, 14, 12, 14));
         card.setMinWidth(90);
-        card.setStyle("-fx-background-color: white; -fx-background-radius: 9; "
-                + "-fx-border-color: #e3e8ef; -fx-border-radius: 9;");
+        card.setStyle("-fx-background-color: white; -fx-background-radius: 12; "
+                + "-fx-border-color: #e2e8f0; -fx-border-radius: 12; "
+                + "-fx-effect: dropshadow(gaussian, rgba(15,23,42,0.045), 10, 0, 0, 3);");
         return card;
     }
 
     private Button primaryButton(String text) {
         Button button = new Button(text);
-        button.setStyle("-fx-background-color: #126b82; -fx-text-fill: white; "
-                + "-fx-font-weight: bold; -fx-background-radius: 8; -fx-padding: 10 15;");
+        button.setStyle("-fx-background-color: linear-gradient(to bottom right, #2563eb, #1d4ed8); "
+                + "-fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 9; "
+                + "-fx-padding: 11 16; -fx-cursor: hand; "
+                + "-fx-effect: dropshadow(gaussian, rgba(37,99,235,0.20), 8, 0, 0, 2);");
         return button;
     }
 
     private Button secondaryButton(String text) {
         Button button = new Button(text);
-        button.setStyle("-fx-background-color: #edf3f6; -fx-text-fill: #405167; "
-                + "-fx-background-radius: 7; -fx-padding: 8 12;");
+        button.setStyle("-fx-background-color: #ffffff; -fx-text-fill: #334155; "
+                + "-fx-border-color: #dbe3ee; -fx-border-radius: 8; "
+                + "-fx-background-radius: 8; -fx-padding: 9 13; -fx-cursor: hand; "
+                + "-fx-font-weight: bold;");
         return button;
     }
 
     private Button dangerButton(String text) {
         Button button = new Button(text);
-        button.setStyle("-fx-background-color: #fff0ed; -fx-text-fill: #c4473c; "
-                + "-fx-font-weight: bold; -fx-background-radius: 8; -fx-padding: 10 15;");
+        button.setStyle("-fx-background-color: #fff1f2; -fx-text-fill: #be123c; "
+                + "-fx-border-color: #fecdd3; -fx-border-radius: 8; "
+                + "-fx-font-weight: bold; -fx-background-radius: 8; -fx-padding: 10 15; "
+                + "-fx-cursor: hand;");
         return button;
     }
 
@@ -1943,9 +2301,11 @@ public class MainView {
     }
 
     private String stateStyle(boolean running) {
-        return "-fx-background-color: " + (running ? "#e7f8ef" : "#fff0ed")
-                + "; -fx-text-fill: " + (running ? "#14804a" : "#bf3f32")
-                + "; -fx-padding: 9 13; -fx-background-radius: 20; -fx-font-weight: bold;";
+        return "-fx-background-color: " + (running ? "#ecfdf3" : "#fff1f2")
+                + "; -fx-text-fill: " + (running ? "#15803d" : "#be123c")
+                + "; -fx-padding: 9 14; -fx-background-radius: 20; -fx-font-weight: bold;"
+                + " -fx-border-color: " + (running ? "#bbf7d0" : "#fecdd3")
+                + "; -fx-border-radius: 20;";
     }
 
     private String badgeStyle(String background, String foreground) {

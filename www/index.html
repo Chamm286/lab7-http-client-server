@@ -528,7 +528,7 @@
             <section class="view-pane pane-stack" id="view-request" data-view-pane="request" hidden>
                 <section class="card request-card">
                     <h2 class="card-title">Tạo HTTP request</h2>
-                    <p class="request-explainer"><strong>Trình duyệt HTTP:</strong> nhập URL đầy đủ của tài nguyên và gửi GET, POST hoặc HEAD. GET/POST hiển thị độ dài HTML (byte nhận được và ký tự UTF-16 sau giải mã theo charset response) cùng số thẻ chuẩn; HEAD hiển thị status và metadata. Do CORS, trang này chỉ gửi được đến origin hiện tại; dùng JavaFX Client để thử URL HTTP/HTTPS bên ngoài.</p>
+                    <p class="request-explainer"><strong>Trình duyệt HTTP:</strong> nhập URL đầy đủ, ví dụ <code>https://vku.udn.vn/</code>, rồi gửi GET, POST hoặc HEAD. Server sẽ lấy URL bên ngoài qua proxy để tránh giới hạn CORS của trình duyệt. GET/POST hiển thị độ dài HTML (byte nhận được và ký tự UTF-16 sau giải mã theo charset response) cùng số thẻ chuẩn; HEAD hiển thị status và metadata. Proxy chỉ nhận URL HTTP/HTTPS công khai qua cổng 80/443; JavaFX Client có thể gửi request trực tiếp.</p>
                     <div class="request-row">
                         <select id="method" aria-label="Phương thức HTTP">
                             <option value="GET">GET</option>
@@ -839,15 +839,14 @@
         let target;
         try {
             target = new URL(enteredPath, serverOrigin);
+            target.hash = "";
         } catch (error) {
             showError("URL không hợp lệ.");
             return;
         }
-        if (target.origin !== serverOrigin) {
-            showError("Trang Web Client bị giới hạn cùng origin bởi CORS. Hãy dùng JavaFX Client để gửi đến host khác.");
-            return;
-        }
         const path = target.pathname + target.search;
+        const proxyTarget = new URL("/__browse", serverOrigin);
+        proxyTarget.searchParams.set("url", target.href);
         const requestBody = method === "POST" ? postBodyInput.value : null;
         const requestHeaders = method === "POST"
             ? { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" }
@@ -867,7 +866,7 @@
             + "<span>Request HTTP đang được gửi đến " + escapeHtml(path) + "</span></div></div>";
 
         try {
-            const response = await fetch(target.href, {
+            const response = await fetch(proxyTarget.href, {
                 method,
                 headers: requestHeaders,
                 body: requestBody,
@@ -1201,7 +1200,7 @@
             previewPanel.replaceChildren(summary);
             return;
         }
-        if (contentType.toLowerCase().includes("text/html")) {
+        if (isHtmlResponse(contentType, text)) {
             const parsedHtml = new DOMParser().parseFromString(text, "text/html");
             const counts = Object.fromEntries(["p", "div", "span", "img"].map((tag) => [
                 tag, parsedHtml.getElementsByTagName(tag).length
@@ -1237,6 +1236,15 @@
         } else {
             previewPanel.innerHTML = "<pre>" + escapeHtml(text || "Tệp không có nội dung văn bản. Dùng Tải nội dung để lưu về máy.") + "</pre>";
         }
+    }
+
+    function isHtmlResponse(contentType, text) {
+        const normalizedType = contentType.toLowerCase();
+        if (normalizedType.includes("text/html")
+                || normalizedType.includes("application/xhtml+xml")) {
+            return true;
+        }
+        return /<\s*(?:!doctype\s+html|html|head|body|p|div|span|img)(?:\s|\/?>)/i.test(text);
     }
 
     function showError(message) {
