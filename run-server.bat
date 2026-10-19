@@ -6,6 +6,6 @@ if not defined JAVA_HOME (
     exit /b 1
 )
 if not exist out mkdir out
-"%JAVA_HOME%\bin\javac.exe" -encoding UTF-8 -d out src\core\AuditStore.java src\core\HttpServerCore.java src\server\ServerMain.java
+"%JAVA_HOME%\bin\javac.exe" -encoding UTF-8 -d out src\core\AuditStore.java src\core\UrlInspector.java src\core\HttpServerCore.java src\server\ServerMain.java
 if errorlevel 1 exit /b 1
 "%JAVA_HOME%\bin\java.exe" -cp out server.ServerMain %*
