@@ -1,0 +1,7 @@
+.git
+.vscode
+libs
+out
+lab7-data
+www/uploads
+*.class

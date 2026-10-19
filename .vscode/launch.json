@@ -1,0 +1,26 @@
+﻿{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Run Server UI",
+            "request": "launch",
+            "mainClass": "ServerApp",
+            "vmArgs": "--module-path \"${workspaceFolder}\\libs\\javafx-sdk-21.0.5\\lib\" --add-modules javafx.controls,javafx.web"
+        },
+        {
+            "type": "java",
+            "name": "Run Client UI",
+            "request": "launch",
+            "mainClass": "ClientApp",
+            "vmArgs": "--module-path \"${workspaceFolder}\\libs\\javafx-sdk-21.0.5\\lib\" --add-modules javafx.controls,javafx.web"
+        },
+        {
+            "type": "java",
+            "name": "Run Combined Demo",
+            "request": "launch",
+            "mainClass": "App",
+            "vmArgs": "--module-path \"${workspaceFolder}\\libs\\javafx-sdk-21.0.5\\lib\" --add-modules javafx.controls,javafx.web"
+        }
+    ]
+}

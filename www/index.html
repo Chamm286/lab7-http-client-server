@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#155e75">
+    <title>HTTP Client Console | Lab 7</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: #e5e7eb;
+            background: #0b1020;
+            font-synthesis: none;
+            text-rendering: optimizeLegibility;
+        }
+
+        * { box-sizing: border-box; }
+
+        body { min-width: 320px; min-height: 100vh; margin: 0; }
+
+        button, input, select { font: inherit; }
+
+        .app { min-height: 100vh; display: grid; grid-template-rows: 66px 1fr; }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            padding: 0 24px;
+            border-bottom: 1px solid #202a3c;
+            background: #111827;
+        }
+
+        .brand-mark {
+            display: grid;
+            width: 34px;
+            height: 34px;
+            place-items: center;
+            border-radius: 10px;
+            background: #155e75;
+            color: white;
+            font-weight: 800;
+        }
+
+        .brand { font-size: 14px; font-weight: 700; }
+        .brand small { display: block; margin-top: 3px; color: #8792a7; font-size: 10px; font-weight: 500; }
+        .spacer { flex: 1; }
+
+        .origin {
+            max-width: min(42vw, 440px);
+            overflow: hidden;
+            padding: 8px 12px;
+            border: 1px solid #293448;
+            border-radius: 8px;
+            color: #aab5c8;
+            font-family: Consolas, monospace;
+            font-size: 12px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .server-state {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 10px;
+            border: 1px solid #14543c;
+            border-radius: 999px;
+            background: #0d2a22;
+            color: #65d6a3;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .server-state i { width: 7px; height: 7px; border-radius: 50%; background: #39c887; }
+        .server-state.offline { border-color: #f0c8c8; background: #fff2f2; color: #b93838; }
+        .server-state.offline i { background: #cf4e4e; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 250px minmax(0, 1fr);
+            min-height: 0;
+        }
+
+        aside {
+            padding: 22px 16px;
+            border-right: 1px solid #202a3c;
+            background: #111827;
+        }
+
+        .side-label {
+            margin: 0 0 10px 8px;
+            color: #778399;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .12em;
+        }
+
+        .side-nav { display: grid; gap: 5px; }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 11px;
+            border-radius: 8px;
+            color: #aab4c5;
+            font-size: 13px;
+            text-decoration: none;
+        }
+
+        .nav-item.active { background: #e8f3f7; color: #155e75; }
+        .nav-item .icon { width: 19px; text-align: center; color: #0f7181; }
+        .nav-item:hover { background: #1b2537; }
+        .nav-item.active:hover { background: #edf5f8; }
+
+        .side-card {
+            margin-top: 24px;
+            padding: 14px;
+            border: 1px solid #293448;
+            border-radius: 11px;
+            background: #151e2e;
+        }
+
+        .side-card h2 { margin: 0 0 12px; color: #8792a7; font-size: 10px; letter-spacing: .1em; }
+        .side-card p { margin: 0; color: #aeb8ca; font-size: 12px; line-height: 1.7; }
+        .side-card code { color: #155e75; font-family: Consolas, monospace; }
+        .server-card label { display: block; margin: 13px 0 6px; color: #8792a7; font-size: 9px; font-weight: 700; letter-spacing: .08em; }
+        .server-card input { height: 34px; padding: 0 9px; font-size: 11px; }
+        .server-card small { display: block; margin: 5px 0 10px; color: #8792a7; font-size: 10px; line-height: 1.5; }
+
+        main { min-width: 0; padding: 28px clamp(18px, 3vw, 42px); }
+        .page-heading { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 21px; }
+        .page-heading h1 { margin: 0; font-size: 23px; letter-spacing: -.025em; }
+        .page-heading p { margin: 6px 0 0; color: #8f9bb0; font-size: 13px; }
+        .method-pill { margin-left: auto; padding: 7px 10px; border: 1px solid #293448; border-radius: 7px; color: #aeb8ca; font-family: Consolas, monospace; font-size: 11px; }
+        .auth-token { display: grid; flex: 0 0 min(250px, 24vw); gap: 5px; }
+        .auth-token label { color: #8792a7; font-size: 9px; font-weight: 700; letter-spacing: .08em; }
+        .auth-token input { height: 33px; font-size: 11px; }
+        .auth-token .token-actions { display: flex; gap: 6px; }
+        .auth-token .token-actions button { min-height: 30px; padding: 0 10px; font-size: 10px; }
+        .auth-token small { color: #8792a7; font-size: 10px; line-height: 1.4; }
+
+        .card {
+            border: 1px solid #253147;
+            border-radius: 12px;
+            background: #111827;
+            box-shadow: 0 8px 26px #05091428;
+        }
+
+        .request-card { padding: 17px; }
+        .card-title { margin: 0 0 13px; color: #d9dfeb; font-size: 12px; font-weight: 700; }
+
+        .request-row { display: grid; grid-template-columns: 112px minmax(120px, 1fr) auto; gap: 9px; }
+
+        select, input {
+            width: 100%;
+            height: 41px;
+            padding: 0 12px;
+            border: 1px solid #354158;
+            border-radius: 8px;
+            outline: none;
+            background: #0b1220;
+            color: #e5e7eb;
+        }
+
+        input { font-family: Consolas, monospace; font-size: 13px; }
+        select:focus, input:focus { border-color: #27839a; box-shadow: 0 0 0 3px #27839a1c; }
+
+        button {
+            min-height: 39px;
+            padding: 0 14px;
+            border: 1px solid #38445b;
+            border-radius: 8px;
+            background: #1a2435;
+            color: #d5dbea;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 650;
+            transition: background .15s, border-color .15s, transform .15s;
+        }
+
+        button:hover { border-color: #7aa9b7; background: #f2f8fa; }
+        button:active { transform: translateY(1px); }
+        button:disabled { cursor: wait; opacity: .6; }
+        .primary { border-color: #126b82; background: #126b82; color: white; }
+        .primary:hover { border-color: #0e596d; background: #0e596d; }
+
+        .quick-paths { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
+        .quick-paths span { margin-right: 3px; color: #7f8ba0; font-size: 11px; }
+        .path-chip { min-height: 27px; padding: 0 9px; border-radius: 6px; font-family: Consolas, monospace; font-size: 11px; }
+
+        .response-card { margin-top: 16px; overflow: hidden; }
+        .response-top {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 9px;
+            min-height: 54px;
+            padding: 10px 16px;
+            border-bottom: 1px solid #253147;
+        }
+
+        .response-title { margin-right: auto; color: #d9dfeb; font-size: 12px; font-weight: 700; }
+        .badge { padding: 5px 8px; border: 1px solid #344057; border-radius: 6px; color: #aab5c8; font-family: Consolas, monospace; font-size: 11px; }
+        .badge.ok { border-color: #14543c; background: #0d2a22; color: #65d6a3; }
+        .badge.bad { border-color: #643339; background: #321a22; color: #ff9a9e; }
+        .meta { color: #8995aa; font-size: 11px; }
+
+        .response-tabs { display: flex; gap: 5px; padding: 10px 13px 0; border-bottom: 1px solid #253147; }
+        .response-tab { min-height: 34px; padding: 0 11px; border: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: transparent; color: #8e9ab0; }
+        .response-tab:hover { background: #1a2435; }
+        .response-tab.selected { border-bottom-color: #126b82; color: #155e75; }
+        .panel { display: none; min-height: 290px; max-height: 52vh; overflow: auto; padding: 16px; }
+        .panel.selected { display: block; }
+        pre { margin: 0; color: #c5d0e0; font: 12px/1.65 Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .preview-frame { display: block; width: 100%; height: 440px; border: 1px solid #dfe4ed; border-radius: 8px; background: white; }
+        .empty-state { display: grid; min-height: 250px; place-items: center; color: #8490a5; text-align: center; }
+        .empty-state strong { display: block; margin-bottom: 8px; color: #c5cddd; font-size: 15px; }
+        .empty-state span { font-size: 12px; line-height: 1.7; }
+
+        .lower-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 16px; margin-top: 16px; }
+        .lower-card { min-width: 0; padding: 16px; }
+        .lower-title { display: flex; align-items: center; justify-content: space-between; margin: 0 0 13px; color: #d9dfeb; font-size: 12px; font-weight: 700; }
+        .history-table-wrap { max-height: 62vh; overflow: auto; border: 1px solid #e2e8f0; border-radius: 9px; }
+        .history-table { width: 100%; border-collapse: collapse; color: #405167; font-size: 11px; text-align: left; }
+        .history-table th { position: sticky; top: 0; padding: 11px 12px; background: #f6f9fb; color: #718096; font-size: 10px; letter-spacing: .05em; white-space: nowrap; }
+        .history-table td { max-width: 340px; padding: 10px 12px; border-top: 1px solid #edf1f5; overflow-wrap: anywhere; }
+        .history-table code { color: #155e75; font-weight: 700; }
+        .history-table .status-good { color: #11734b; font-weight: 700; }
+        .history-table .status-bad { color: #b93838; font-weight: 700; }
+        .history-empty { padding: 22px 12px; color: #758397; text-align: center; }
+        .history-table .replay-button { min-height: 29px; padding: 0 9px; font-size: 10px; white-space: nowrap; }
+        .file-list { display: grid; gap: 8px; }
+        .file-entry { display: flex; align-items: center; gap: 9px; padding: 9px; border: 1px solid #253147; border-radius: 7px; color: #aeb8ca; font: 11px Consolas, monospace; }
+        .file-entry button { min-height: 27px; margin-left: auto; padding: 0 8px; font-size: 10px; }
+        .tip { margin: 11px 0 0; color: #778399; font-size: 10px; line-height: 1.6; }
+        .upload-card { display: flex; align-items: center; flex-wrap: wrap; gap: 15px; margin-top: 16px; padding: 17px; }
+        .upload-card .card-title { margin-bottom: 5px; }
+        .upload-card .tip { margin: 0; }
+        .upload-row { display: flex; flex: 1; min-width: min(100%, 420px); gap: 9px; }
+        .upload-row input { height: auto; min-height: 39px; padding: 7px; font-family: "Segoe UI", Arial, sans-serif; }
+        .upload-row #upload-method { width: auto; min-width: 150px; }
+        .upload-row #upload-file { min-width: 130px; flex: 1; }
+        .file-entry button + button { margin-left: 0; }
+        .upload-attachments { display: grid; flex-basis: 100%; gap: 7px; }
+        .upload-attachment { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 9px 11px; border: 1px solid #293448; border-radius: 8px; background: #0d1524; }
+        .upload-attachment strong { overflow: hidden; color: #d5dbea; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+        .upload-attachment small { color: #8995aa; font-size: 10px; }
+        .upload-attachment .attachment-state { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: #aab5c8; font-size: 10px; }
+        .upload-attachment .attachment-state.ok { color: #65d6a3; }
+        .upload-attachment .attachment-state.bad { color: #ff9a9e; }
+        .upload-status { flex-basis: 100%; color: #8995aa; font-size: 11px; }
+        .upload-status.ok { color: #65d6a3; }
+        .upload-status.bad { color: #ff9a9e; }
+
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; }
+            aside { display: none; }
+            .lower-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 600px) {
+            .topbar { padding: 0 13px; }
+            .origin { max-width: 35vw; }
+            .server-state { font-size: 0; }
+            .server-state i { width: 9px; height: 9px; }
+            main { padding: 20px 12px; }
+            .request-row { grid-template-columns: 85px minmax(80px, 1fr); }
+            .request-row .primary { grid-column: 1 / -1; }
+            .panel { min-height: 220px; }
+        }
+
+        :root {
+            color-scheme: dark;
+            color: #d8e2f0;
+            background: #0b1220;
+        }
+        body { background: #0b1220; color: #d8e2f0; }
+        .topbar { position: sticky; top: 0; z-index: 5; padding: 0 26px; background: #0e1726; border-color: #223047; box-shadow: 0 2px 12px #03071255; }
+        .brand-mark { background: #087e8b; }
+        .brand { color: #e5edf8; }
+        .brand small { color: #8393a9; }
+        .origin { background: #101c2d; border-color: #2a3a52; color: #9fb1c7; }
+        .server-state { background: #10291f; border-color: #1e5a41; color: #69d7a4; }
+        .server-state i { background: #35c987; }
+        .server-state.offline { border-color: #6b3540; background: #301c25; color: #ff9a9e; }
+        .server-state.offline i { background: #ee6972; }
+        .layout { grid-template-columns: 244px minmax(0, 1fr); }
+        aside { position: sticky; top: 68px; height: calc(100vh - 68px); padding: 25px 15px; overflow-y: auto; background: #0e1726; border-color: #223047; }
+        .side-label { color: #718198; letter-spacing: .1em; }
+        .side-nav { gap: 6px; }
+        .nav-item { width: 100%; min-height: 43px; border: 1px solid transparent; background: transparent; color: #a6b5c9; text-align: left; cursor: pointer; }
+        .nav-item .icon { color: #7e91aa; }
+        .nav-item.active { border-color: #214357; background: #122b3b; color: #7dd3e0; font-weight: 700; }
+        .nav-item.active .icon { color: #55c5d4; }
+        .nav-item:hover { background: #17253a; }
+        .nav-item.active:hover { background: #163346; }
+        .side-card { margin-top: 24px; background: #111e30; border-color: #2a3a52; }
+        .side-card h2 { color: #8393a9; }
+        .side-card p { color: #a6b5c9; }
+        .side-card code { color: #70cbd7; overflow-wrap: anywhere; }
+        .auth-token label { color: #8b9bb1; }
+        .auth-token small { color: #8292a8; }
+        .auth-token .token-actions button { border-color: #34465f; background: #172438; color: #c2cede; }
+        .server-card { display: grid; gap: 10px; }
+        .server-card p { margin: 0; }
+        .server-card .server-url { display: block; padding: 10px; border: 1px solid #2c4058; border-radius: 7px; background: #0c1625; color: #71d1dd; font: 11px/1.5 Consolas, monospace; overflow-wrap: anywhere; }
+        .server-card button { min-height: 32px; }
+        main { width: min(100%, 1500px); margin: 0 auto; padding: 28px clamp(18px, 3vw, 42px); }
+        .page-heading { align-items: center; margin-bottom: 18px; }
+        .page-heading h1 { color: #edf3fb; font-size: 25px; letter-spacing: -.03em; }
+        .page-heading p { color: #8b9bb1; line-height: 1.55; }
+        .method-pill { border-color: #2b3b52; background: #111c2b; color: #a2b2c7; }
+        .card { border-color: #26364e; border-radius: 11px; background: #111c2b; box-shadow: 0 8px 24px #03071235; }
+        .request-card, .upload-card { padding: 20px; }
+        .card-title, .response-title { color: #e3ebf6; font-size: 13px; }
+        select, input { border-color: #34465f; background: #0b1524; color: #e0e9f5; }
+        input { font-family: "Segoe UI", Arial, sans-serif; }
+        select:focus, input:focus { border-color: #25a4b6; box-shadow: 0 0 0 3px #25a4b622; }
+        button { border-color: #34465f; background: #172438; color: #c7d3e3; }
+        button:hover { border-color: #32899a; background: #1c3045; }
+        button:disabled { cursor: not-allowed; }
+        .primary { border-color: #087e8b; background: #087e8b; color: #f5feff; }
+        .primary:hover { border-color: #0b98a6; background: #0b98a6; }
+        .path-chip { font-weight: 600; }
+        .quick-paths span, .tip { color: #8494aa; }
+        .upload-card { display: grid; grid-template-columns: 1fr; gap: 13px; margin-top: 0; }
+        .upload-card .card-title { margin-bottom: 5px; font-size: 15px; }
+        .upload-row { display: grid; grid-template-columns: minmax(150px, 190px) minmax(0, 1fr) auto; min-width: 0; gap: 10px; }
+        .upload-row #upload-method { width: 100%; min-width: 0; }
+        .upload-row input[type="file"] { width: 100%; min-width: 0; padding: 7px; }
+        .upload-row input[type="file"]::file-selector-button { margin-right: 10px; padding: 7px 11px; border: 0; border-radius: 6px; background: #18344a; color: #83d1dc; font-weight: 700; cursor: pointer; }
+        .file-dropzone { position: relative; display: flex; min-width: 0; min-height: 48px; align-items: center; gap: 11px; padding: 6px 12px; overflow: hidden; border: 1px dashed #3b526a; border-radius: 8px; background: #0d1929; cursor: pointer; }
+        .file-dropzone:hover, .file-dropzone.drag-over { border-color: #25a4b6; background: #12283a; }
+        .drop-icon { display: grid; width: 32px; height: 32px; flex: 0 0 32px; place-items: center; border-radius: 7px; background: #17364a; color: #75d1de; font-size: 20px; }
+        .drop-copy { display: grid; min-width: 0; gap: 2px; }
+        .drop-copy strong { overflow: hidden; color: #d7e3f1; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+        .drop-copy small { overflow: hidden; color: #8495aa; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+        .file-dropzone input[type="file"] { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; padding: 0; opacity: 0; cursor: pointer; }
+        .upload-attachments { gap: 8px; }
+        .upload-attachment { grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 5px 14px; padding: 12px 14px; border-color: #2b3c54; background: #0d1828; }
+        .upload-attachment strong { color: #dce6f3; font-size: 12px; }
+        .upload-attachment small { color: #8c9db2; }
+        .upload-attachment .attachment-state { grid-column: auto; grid-row: 1 / span 2; color: #a8b8cb; }
+        .upload-attachment .attachment-state.ok { color: #6bd8a6; }
+        .upload-attachment .attachment-state.bad { color: #ff969d; }
+        .attachment-download { grid-column: 3; grid-row: 1 / span 2; min-height: 31px; padding: 0 10px; border-color: #24634d; background: #112b23; color: #72d8a8; font-size: 11px; }
+        .attachment-download:hover { border-color: #328d68; background: #163a2d; }
+        .upload-status { color: #97a7bb; }
+        .upload-status.ok { color: #70d8a7; }
+        .upload-status.bad { color: #ff969d; }
+        .upload-progress { width: 100%; height: 7px; overflow: hidden; border: 0; border-radius: 99px; background: #25334a; color: #19a3b4; }
+        .upload-progress::-webkit-progress-bar { border-radius: 99px; background: #25334a; }
+        .upload-progress::-webkit-progress-value { border-radius: 99px; background: #19a3b4; }
+        .upload-progress::-moz-progress-bar { border-radius: 99px; background: #19a3b4; }
+        .response-card { margin-top: 0; }
+        .response-top { border-color: #26364e; }
+        .badge { border-color: #354760; color: #aab9cc; background: #142135; }
+        .badge.ok { border-color: #24634d; background: #112b23; color: #70d8a7; }
+        .badge.bad { border-color: #6c3942; background: #321d27; color: #ff969d; }
+        .meta { color: #91a1b6; }
+        .response-tabs { border-color: #26364e; }
+        .response-tab { color: #94a5bb; }
+        .response-tab:hover { background: #17263a; }
+        .response-tab.selected { border-bottom-color: #26b4c4; color: #78d4df; }
+        .panel { min-height: 270px; }
+        pre { color: #c5d2e2; }
+        .empty-state { color: #91a1b6; }
+        .empty-state strong { color: #e0e9f5; }
+        .lower-card { padding: 17px; }
+        .lower-title { color: #e0e9f5; }
+        .history-table-wrap { border-color: #293a52; }
+        .history-table { color: #b8c6d8; }
+        .history-table th { background: #172438; color: #91a1b6; }
+        .history-table td { border-color: #26364e; }
+        .history-table code, .request-entry code { color: #7bd2de; }
+        .history-table .status-good { color: #70d8a7; }
+        .history-table .status-bad { color: #ff969d; }
+        .history-empty { color: #91a1b6; }
+        .request-entry, .file-entry { border-color: #2a3b53; background: #0d1828; }
+        .request-entry span, .file-entry { color: #b7c5d7; }
+        .request-entry small { color: #8b9bb1; }
+        .file-entry button { border-color: #3a5069; color: #82d3de; }
+        .file-entry button:hover { border-color: #32899a; background: #172b3e; }
+        .file-actions { display: flex; gap: 6px; margin-left: auto; }
+        .file-entry button.file-download { border-color: #24634d; background: #112b23; color: #70d8a7; }
+        .file-entry button.file-delete { border-color: #633842; color: #ff969d; }
+        .lower-grid { gap: 15px; }
+        .view-pane[hidden] { display: none !important; }
+        .pane-stack { display: grid; gap: 14px; }
+        .transfer-help { margin-top: 13px; padding: 13px 15px; border: 1px solid #254458; border-radius: 9px; background: #102232; color: #a6b7c9; font-size: 12px; line-height: 1.7; }
+        .transfer-help strong { color: #7bd2de; }
+        .transfer-help code { color: #8ddbe4; }
+        .empty-files { padding: 22px; border: 1px dashed #344a63; border-radius: 9px; color: #91a1b6; text-align: center; }
+        .nav-item:focus-visible, button:focus-visible { outline: 3px solid #22a8ba55; outline-offset: 2px; }
+        textarea { width: 100%; min-height: 92px; padding: 11px 12px; border: 1px solid #34465f; border-radius: 8px; outline: none; background: #0b1524; color: #dce6f3; font: 12px/1.6 Consolas, monospace; resize: vertical; }
+        textarea:focus { border-color: #25a4b6; box-shadow: 0 0 0 3px #25a4b622; }
+        .post-body-card { margin-top: 12px; padding: 15px; }
+        .post-body-card[hidden] { display: none; }
+        .post-body-card label { display: block; margin-bottom: 8px; color: #d1deec; font-size: 11px; font-weight: 700; }
+        .post-body-card small { display: block; margin-top: 7px; color: #899bb1; font-size: 10px; }
+        .analysis-grid { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 8px; margin-bottom: 12px; }
+        .analysis-card { padding: 11px 12px; border: 1px solid #2b4356; border-radius: 8px; background: #102232; }
+        .analysis-card small { display: block; color: #8fa2b6; font-size: 9px; font-weight: 700; letter-spacing: .05em; }
+        .analysis-card strong { display: block; margin-top: 5px; color: #7bd2de; font: 700 14px Consolas, monospace; }
+        .request-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 17px; padding: 12px; border: 1px solid #263b50; border-radius: 10px; background: linear-gradient(110deg, #102131, #111b2a); }
+        .flow-step { display: grid; grid-template-columns: 27px minmax(0, 1fr); align-items: start; gap: 3px 10px; min-width: 0; }
+        .flow-number { grid-row: 1 / span 2; display: grid; width: 26px; height: 26px; place-items: center; border: 1px solid #276074; border-radius: 7px; background: #123142; color: #83d7e1; font: 700 11px Consolas, monospace; }
+        .flow-step strong { color: #dce6f3; font-size: 11px; }
+        .flow-step span:last-child { color: #90a2b7; font-size: 10px; line-height: 1.45; }
+        .request-explainer { margin: -4px 0 15px; padding: 11px 13px; border-left: 3px solid #1593a5; border-radius: 0 7px 7px 0; background: #102232; color: #a9b9ca; font-size: 11px; line-height: 1.7; }
+        .request-explainer strong { color: #84d6e0; }
+        @media (max-width: 900px) {
+            .auth-token { flex-basis: 230px; }
+            .layout { grid-template-columns: 1fr; }
+            aside { position: sticky; top: 68px; z-index: 4; display: block; width: 100%; height: auto; padding: 7px 12px; overflow: auto hidden; border-right: 0; border-bottom: 1px solid #223047; }
+            .side-label, .side-card { display: none; }
+            .side-nav { display: flex; width: max-content; gap: 5px; }
+            .nav-item { width: auto; min-height: 38px; white-space: nowrap; }
+            main { padding-top: 22px; }
+        }
+        @media (max-width: 600px) {
+            .page-heading { flex-wrap: wrap; }
+            .auth-token { order: 3; flex: 1 1 100%; }
+            .method-pill { margin-left: auto; }
+            .topbar { padding: 0 13px; }
+            .origin { max-width: 38vw; }
+            .server-state { font-size: 0; }
+            .server-state i { width: 9px; height: 9px; }
+            .upload-row { grid-template-columns: 1fr; }
+            .upload-attachment { grid-template-columns: minmax(0, 1fr) auto; }
+            .upload-attachment .attachment-state { grid-column: 2; grid-row: 1; }
+            .attachment-download { grid-column: 2; grid-row: 2; }
+            .response-top { align-items: center; }
+            .page-heading h1 { font-size: 21px; }
+            .history-table th, .history-table td { padding: 8px; }
+            .analysis-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .request-flow { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <header class="topbar">
+        <div class="brand-mark">H</div>
+        <div class="brand">HTTP Client Console<small>LAB 7 · CLIENT — SERVER — TCP/IP</small></div>
+        <div class="spacer"></div>
+        <div id="origin" class="origin"></div>
+        <div id="server-state" class="server-state"><i></i> KIỂM TRA MÁY CHỦ</div>
+    </header>
+
+    <div class="layout">
+        <aside>
+            <p class="side-label">KHÔNG GIAN LÀM VIỆC</p>
+            <nav class="side-nav" aria-label="Điều hướng chính">
+                <button class="nav-item" type="button" data-view="transfer"><span class="icon">↑</span> Gửi tệp</button>
+                <button class="nav-item" type="button" data-view="files"><span class="icon">▤</span> Tệp máy chủ</button>
+                <button class="nav-item active" type="button" data-view="request"><span class="icon">⇄</span> HTTP Request</button>
+                <button class="nav-item" type="button" data-view="history"><span class="icon">↻</span> Lịch sử</button>
+            </nav>
+            <div class="side-card server-card">
+                <h2>ĐANG KẾT NỐI ĐẾN</h2>
+                <code id="server-address" class="server-url"></code>
+                <button id="copy-server-address" type="button">Sao chép địa chỉ</button>
+            </div>
+        </aside>
+
+        <main>
+            <div class="page-heading">
+                <div>
+                    <h1 id="page-title">HTTP Client · gửi request</h1>
+                    <p id="page-description">Client tạo HTTP request, gửi đến server đang hiển thị và nhận response để bạn kiểm tra.</p>
+                </div>
+                <div class="auth-token">
+                    <label for="write-token">BEARER TOKEN · QUYỀN GHI / AUDIT</label>
+                    <input id="write-token" type="password" autocomplete="off"
+                           placeholder="Sau khi Start server, dán token tại đây">
+                    <div class="token-actions">
+                        <button id="toggle-token" type="button">Hiện token</button>
+                        <button id="clear-token" type="button">Xóa token</button>
+                    </div>
+                    <small>Lấy tại giao diện Server → ô TOKEN QUYỀN GHI, hoặc dòng WRITE_TOKEN khi chạy run-server.bat.</small>
+                </div>
+                <span class="method-pill">HTTP/1.0 · HTTP/1.1 · TCP/IP</span>
+            </div>
+
+            <section class="request-flow" aria-label="Cách HTTP client hoạt động">
+                <div class="flow-step"><span class="flow-number">01</span>
+                    <strong>Client → Request</strong>
+                    <span>Chọn method và tài nguyên. Máy khác phải mở URL LAN, không dùng localhost.</span></div>
+                <div class="flow-step"><span class="flow-number">02</span>
+                    <strong>Server xử lý</strong>
+                    <span>Server kiểm tra quyền, đọc hoặc ghi tệp.</span></div>
+                <div class="flow-step"><span class="flow-number">03</span>
+                    <strong>Response ← Client</strong>
+                    <span>Xem status, headers, body và thời gian phản hồi.</span></div>
+            </section>
+
+            <section class="view-pane pane-stack" id="view-transfer" data-view-pane="transfer" hidden>
+                <section class="card upload-card">
+                    <div>
+                        <h2 class="card-title">Tệp đính kèm</h2>
+                        <p class="tip">Gửi tệp từ máy này lên server qua HTTP. Mỗi tệp tối đa 50 MB.</p>
+                    </div>
+                    <div class="upload-row">
+                        <select id="upload-method" aria-label="Phương thức gửi tệp">
+                            <option value="POST">POST · gửi tệp mới</option>
+                            <option value="PUT">PUT · tạo hoặc thay thế</option>
+                        </select>
+                        <label class="file-dropzone" id="file-dropzone" for="upload-file">
+                            <span class="drop-icon">＋</span>
+                            <span class="drop-copy"><strong id="file-selection-title">Chọn tệp đính kèm</strong>
+                                <small id="file-selection-hint">Nhấn để duyệt hoặc kéo thả tệp vào đây</small></span>
+                            <input id="upload-file" type="file" multiple aria-label="Chọn một hoặc nhiều tệp tải lên">
+                        </label>
+                        <button id="upload" class="primary" type="button">Gửi lên máy chủ</button>
+                    </div>
+                    <p class="request-explainer" id="upload-method-help"><strong>POST:</strong> gửi tệp mới đến <code>/__upload</code>; server lưu trong <code>/uploads</code>. Muốn ghi đè tệp theo tên, chọn PUT.</p>
+                    <div id="upload-attachments" class="upload-attachments" aria-live="polite"></div>
+                    <progress id="upload-progress" class="upload-progress" max="100" value="0" hidden></progress>
+                    <div id="upload-status" class="upload-status" role="status">Chưa chọn tệp.</div>
+                </section>
+                <div class="transfer-help"><strong>Sau khi gửi:</strong> client hiển thị status code cho từng tệp. Dùng <em>Tải về</em> để nhận lại bản sao từ server; tệp được lưu trong <code>/uploads</code>.</div>
+            </section>
+
+            <section class="view-pane pane-stack" id="view-request" data-view-pane="request" hidden>
+                <section class="card request-card">
+                    <h2 class="card-title">Tạo HTTP request</h2>
+                    <p class="request-explainer"><strong>Trình duyệt HTTP:</strong> nhập URL đầy đủ của tài nguyên và gửi GET, POST hoặc HEAD. GET/POST hiển thị độ dài HTML (byte nhận được và ký tự UTF-16 sau giải mã theo charset response) cùng số thẻ chuẩn; HEAD hiển thị status và metadata. Do CORS, trang này chỉ gửi được đến origin hiện tại; dùng JavaFX Client để thử URL HTTP/HTTPS bên ngoài.</p>
+                    <div class="request-row">
+                        <select id="method" aria-label="Phương thức HTTP">
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="HEAD">HEAD</option>
+                        </select>
+                        <input id="path" type="text" value="/__files" aria-label="URL tài nguyên"
+                               placeholder="https://host/path">
+                        <button id="send" class="primary" type="button">Gửi request</button>
+                    </div>
+                    <div class="quick-paths">
+                        <span>Đường dẫn nhanh:</span>
+                        <button class="path-chip" data-path="/__files">Danh sách tệp · GET</button>
+                        <button class="path-chip" data-path="/__health">Trạng thái dịch vụ · GET</button>
+                        <button class="path-chip" data-path="/__audit">Audit · GET</button>
+                        <button class="path-chip" data-path="/">Trang client · GET</button>
+                        <button class="path-chip" data-path="/__submit" data-method="POST">Biểu mẫu · POST</button>
+                    </div>
+                    <div id="post-body-card" class="card post-body-card" hidden>
+                        <label for="post-body">REQUEST BODY · application/x-www-form-urlencoded</label>
+                        <textarea id="post-body" spellcheck="false"
+                                  aria-label="Nội dung body gửi trong POST">name=Student&amp;message=Hello%20server</textarea>
+                        <small>Body được gửi sau các HTTP headers; Content-Length do trình duyệt tính theo byte UTF-8.</small>
+                    </div>
+                </section>
+            </section>
+
+            <section class="view-pane" id="view-files" data-view-pane="files" hidden>
+                <section class="card lower-card">
+                    <h2 class="lower-title">Tệp trên máy chủ <button id="refresh-files" type="button">Làm mới</button></h2>
+                    <div id="file-list" class="file-list">
+                        <div class="empty-files">Đang tải danh sách tệp…</div>
+                    </div>
+                    <p class="tip">Chọn “Tải về” để lưu tệp từ máy chủ vào thiết bị này. Xóa chỉ áp dụng cho tệp trong <code>/uploads</code>.</p>
+                </section>
+            </section>
+
+            <section class="view-pane" id="view-history" data-view-pane="history" hidden>
+                <section class="card lower-card">
+                    <h2 class="lower-title">Lịch sử request <button id="clear-history" type="button">Xóa lịch sử</button></h2>
+                    <div class="history-table-wrap">
+                        <table class="history-table">
+                            <thead><tr><th>THỜI GIAN</th><th>METHOD</th><th>ĐƯỜNG DẪN</th>
+                                <th>STATUS</th><th>THỜI GIAN</th><th>DỮ LIỆU</th><th></th></tr></thead>
+                            <tbody id="history-body"></tbody>
+                        </table>
+                    </div>
+                    <div id="history-message" class="upload-status" role="status"></div>
+                </section>
+            </section>
+            <section class="card response-card" id="response-inspector">
+                <div class="response-top">
+                    <span class="response-title">HTTP response gần nhất</span>
+                    <span id="status" class="badge">Chưa gửi request</span>
+                    <span id="duration" class="meta">—</span>
+                    <span id="size" class="meta">—</span>
+                    <button id="download" type="button" disabled>Tải nội dung</button>
+                </div>
+                <div class="response-tabs" role="tablist" aria-label="Chi tiết HTTP response">
+                    <button class="response-tab selected" data-panel="preview" role="tab" aria-selected="true">Xem trước</button>
+                    <button class="response-tab" data-panel="headers" role="tab" aria-selected="false">Request / Response Headers</button>
+                    <button class="response-tab" data-panel="body" role="tab" aria-selected="false">Raw body</button>
+                </div>
+                <div id="preview" class="panel selected">
+                    <div class="empty-state"><div><strong>Sẵn sàng kết nối</strong>
+                        <span>Gửi tệp hoặc HTTP request để xem kết quả tại đây.</span></div></div>
+                </div>
+                <div id="headers" class="panel"><pre>Chưa có HTTP headers.</pre></div>
+                <div id="body" class="panel"><pre>Chưa có response body.</pre></div>
+            </section>
+        </main>
+    </div>
+</div>
+
+<script>
+    "use strict";
+
+    const methodSelect = document.getElementById("method");
+    const pathInput = document.getElementById("path");
+    const writeTokenInput = document.getElementById("write-token");
+    const toggleTokenButton = document.getElementById("toggle-token");
+    const requestBodyLabel = document.querySelector("#post-body-card label");
+    const requestBodyHint = document.querySelector("#post-body-card small");
+    const postBodyCard = document.getElementById("post-body-card");
+    const postBodyInput = document.getElementById("post-body");
+    const sendButton = document.getElementById("send");
+    const downloadButton = document.getElementById("download");
+    const statusBadge = document.getElementById("status");
+    const durationLabel = document.getElementById("duration");
+    const sizeLabel = document.getElementById("size");
+    const previewPanel = document.getElementById("preview");
+    const headersPanel = document.getElementById("headers");
+    const bodyPanel = document.getElementById("body");
+    const historyList = document.getElementById("history-body");
+    const uploadInput = document.getElementById("upload-file");
+    const uploadButton = document.getElementById("upload");
+    const uploadStatus = document.getElementById("upload-status");
+    const uploadAttachments = document.getElementById("upload-attachments");
+    const uploadProgress = document.getElementById("upload-progress");
+    const uploadDropzone = document.getElementById("file-dropzone");
+    const fileSelectionTitle = document.getElementById("file-selection-title");
+    const fileSelectionHint = document.getElementById("file-selection-hint");
+    const fileList = document.getElementById("file-list");
+    const responseInspector = document.getElementById("response-inspector");
+    const pageTitle = document.getElementById("page-title");
+    const pageDescription = document.getElementById("page-description");
+    const serverState = document.getElementById("server-state");
+    const historyMessage = document.getElementById("history-message");
+    const serverOrigin = new URL(document.baseURI).origin;
+    const viewCopy = {
+        transfer: ["Gửi tệp đến máy chủ", "Chọn tệp, gửi qua HTTP và theo dõi kết quả tại đây."],
+        files: ["Tệp trên máy chủ", "Xem, tải về hoặc xóa các tệp đang được máy chủ chia sẻ."],
+        request: ["HTTP Request", "Gửi GET, POST hoặc HEAD; phân tích HTML và xem metadata tài nguyên."],
+        history: ["Lịch sử request", "Xem lại và gửi lại các request trong phiên hiện tại."]
+    };
+    let latestBlob = null;
+    let previewObjectUrl = null;
+    let latestFileName = "http-response";
+    const historyStorageKey = "lab7-http-client-activity-v1";
+    let requestHistory = loadHistory();
+    let selectedUploadFiles = [];
+
+    document.getElementById("origin").textContent = serverOrigin;
+    document.getElementById("server-address").textContent = serverOrigin;
+
+    function loadHistory() {
+        try {
+            const saved = localStorage.getItem(historyStorageKey);
+            const entries = saved ? JSON.parse(saved) : [];
+            return Array.isArray(entries) ? entries.slice(0, 500) : [];
+        } catch (error) {
+            historyMessage.textContent = "Không thể đọc lịch sử đã lưu: " + error.message;
+            historyMessage.className = "upload-status bad";
+            return [];
+        }
+    }
+
+    function recordActivity(method, path, status, elapsed, bytes, fileName = "") {
+        requestHistory.unshift({
+            time: new Date().toLocaleString("vi-VN"),
+            method,
+            path,
+            fileName,
+            status,
+            elapsed,
+            bytes
+        });
+        requestHistory = requestHistory.slice(0, 500);
+        try {
+            localStorage.setItem(historyStorageKey, JSON.stringify(requestHistory));
+        } catch (error) {
+            historyMessage.textContent = "Trình duyệt không lưu được lịch sử: " + error.message;
+            historyMessage.className = "upload-status bad";
+        }
+        renderHistory();
+    }
+
+    document.querySelectorAll("[data-view]").forEach((button) => {
+        button.addEventListener("click", () => selectView(button.dataset.view));
+    });
+    document.getElementById("copy-server-address").addEventListener("click", async (event) => {
+        const button = event.currentTarget;
+        try {
+            await navigator.clipboard.writeText(serverOrigin);
+            button.textContent = "Đã sao chép";
+            window.setTimeout(() => { button.textContent = "Sao chép địa chỉ"; }, 1600);
+        } catch (error) {
+            window.prompt("Sao chép địa chỉ máy chủ:", serverOrigin);
+        }
+    });
+    toggleTokenButton.addEventListener("click", () => {
+        const visible = writeTokenInput.type === "password";
+        writeTokenInput.type = visible ? "text" : "password";
+        toggleTokenButton.textContent = visible ? "Ẩn token" : "Hiện token";
+    });
+    document.getElementById("clear-token").addEventListener("click", () => {
+        writeTokenInput.value = "";
+        writeTokenInput.type = "password";
+        toggleTokenButton.textContent = "Hiện token";
+        writeTokenInput.focus();
+    });
+    uploadInput.addEventListener("change", () =>
+        setSelectedUploadFiles(Array.from(uploadInput.files)));
+    uploadDropzone.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        uploadDropzone.classList.add("drag-over");
+    });
+    uploadDropzone.addEventListener("dragleave", () =>
+        uploadDropzone.classList.remove("drag-over"));
+    uploadDropzone.addEventListener("drop", (event) => {
+        event.preventDefault();
+        uploadDropzone.classList.remove("drag-over");
+        setSelectedUploadFiles(Array.from(event.dataTransfer.files));
+    });
+
+    function setSelectedUploadFiles(files) {
+        selectedUploadFiles = files;
+        renderUploadAttachments();
+        const oversized = files.find((file) => file.size > 50 * 1024 * 1024);
+        if (!files.length) {
+            fileSelectionTitle.textContent = "Chọn tệp đính kèm";
+            fileSelectionHint.textContent = "Nhấn để duyệt hoặc kéo thả tệp vào đây";
+            uploadStatus.textContent = "Chưa chọn tệp.";
+        } else {
+            fileSelectionTitle.textContent = files.length === 1
+                ? files[0].name : files.length + " tệp đã chọn";
+            fileSelectionHint.textContent = files.length === 1
+                ? (files[0].type || "Tệp đính kèm") + " · " + formatBytes(files[0].size)
+                : formatBytes(files.reduce((sum, file) => sum + file.size, 0)) + " tổng dung lượng";
+            uploadStatus.textContent = files.length + " tệp đính kèm"
+                + (oversized ? " · " + oversized.name + " vượt giới hạn 50 MB" : "");
+        }
+        uploadStatus.className = "upload-status" + (oversized ? " bad" : "");
+    }
+
+    function selectView(name) {
+        document.querySelectorAll("[data-view-pane]").forEach((pane) => {
+            pane.hidden = pane.dataset.viewPane !== name;
+        });
+        document.querySelectorAll("[data-view]").forEach((button) => {
+            const selected = button.dataset.view === name;
+            button.classList.toggle("active", selected);
+            button.setAttribute("aria-current", selected ? "page" : "false");
+        });
+        pageTitle.textContent = viewCopy[name][0];
+        pageDescription.textContent = viewCopy[name][1];
+        responseInspector.hidden = name === "files" || name === "history";
+        if (name === "files") refreshFiles();
+        if (name === "history") renderHistory();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function selectPanel(name) {
+        document.querySelectorAll(".response-tab").forEach((tab) => {
+            const selected = tab.dataset.panel === name;
+            tab.classList.toggle("selected", selected);
+            tab.setAttribute("aria-selected", String(selected));
+        });
+        document.querySelectorAll(".panel").forEach((panel) => {
+            panel.classList.toggle("selected", panel.id === name);
+        });
+    }
+
+    document.querySelectorAll(".response-tab").forEach((tab) => {
+        tab.addEventListener("click", () => selectPanel(tab.dataset.panel));
+    });
+
+    document.querySelectorAll("[data-path]").forEach((button) => {
+        button.addEventListener("click", () => {
+            pathInput.value = button.dataset.path;
+            methodSelect.value = button.dataset.method || "GET";
+            methodSelect.dispatchEvent(new Event("change"));
+            sendRequest();
+        });
+    });
+
+    document.querySelectorAll("[data-resource]").forEach((button) => {
+        button.addEventListener("click", () => {
+            pathInput.value = button.dataset.resource;
+            methodSelect.value = "GET";
+            sendRequest();
+        });
+    });
+
+    document.getElementById("clear-history").addEventListener("click", () => {
+        requestHistory = [];
+        try {
+            localStorage.removeItem(historyStorageKey);
+            historyMessage.textContent = "Đã xóa lịch sử giao dịch của trình duyệt này.";
+            historyMessage.className = "upload-status";
+        } catch (error) {
+            historyMessage.textContent = "Không thể xóa lịch sử đã lưu: " + error.message;
+            historyMessage.className = "upload-status bad";
+        }
+        renderHistory();
+    });
+    sendButton.addEventListener("click", () => sendRequest());
+    methodSelect.addEventListener("change", () => {
+        const hasBody = methodSelect.value === "POST";
+        postBodyCard.hidden = !hasBody;
+        requestBodyLabel.textContent = "REQUEST BODY · APPLICATION/X-WWW-FORM-URLENCODED";
+        requestBodyHint.textContent = "Body được gửi đến đúng URL đã nhập; Content-Length tính theo byte UTF-8.";
+    });
+    document.getElementById("upload-method").addEventListener("change", (event) => {
+        document.getElementById("upload-method-help").innerHTML =
+            event.target.value === "POST"
+                ? "<strong>POST:</strong> gửi tệp mới đến <code>/__upload</code>; server lưu trong <code>/uploads</code>. Muốn ghi đè tệp theo tên, chọn PUT."
+                : "<strong>PUT:</strong> gửi đến <code>/uploads/&lt;tên-tệp&gt;</code>; tạo tệp nếu chưa có hoặc thay thế tệp cùng tên.";
+    });
+    pathInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") sendRequest();
+    });
+    postBodyInput.addEventListener("keydown", (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") sendRequest();
+    });
+    downloadButton.addEventListener("click", downloadResponse);
+    uploadButton.addEventListener("click", uploadFile);
+    document.getElementById("refresh-files").addEventListener("click", refreshFiles);
+    async function sendRequest() {
+        const method = methodSelect.value;
+        const enteredPath = pathInput.value.trim();
+        if (!enteredPath) {
+            pathInput.focus();
+            showError("Nhập URL tài nguyên, ví dụ https://example.com/ hoặc /index.html.");
+            return;
+        }
+
+        let target;
+        try {
+            target = new URL(enteredPath, serverOrigin);
+        } catch (error) {
+            showError("URL không hợp lệ.");
+            return;
+        }
+        if (target.origin !== serverOrigin) {
+            showError("Trang Web Client bị giới hạn cùng origin bởi CORS. Hãy dùng JavaFX Client để gửi đến host khác.");
+            return;
+        }
+        const path = target.pathname + target.search;
+        const requestBody = method === "POST" ? postBodyInput.value : null;
+        const requestHeaders = method === "POST"
+            ? { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" }
+            : {};
+        if (writeTokenInput.value.trim()) {
+            requestHeaders.Authorization = "Bearer " + writeTokenInput.value.trim();
+        }
+        const startedAt = performance.now();
+        sendButton.disabled = true;
+        sendButton.textContent = "Đang gửi…";
+        statusBadge.className = "badge";
+        statusBadge.textContent = method + " đang chờ phản hồi";
+        durationLabel.textContent = "Đang kết nối";
+        sizeLabel.textContent = "—";
+        selectPanel("preview");
+        previewPanel.innerHTML = "<div class='empty-state'><div><strong>Đang chờ máy chủ</strong>"
+            + "<span>Request HTTP đang được gửi đến " + escapeHtml(path) + "</span></div></div>";
+
+        try {
+            const response = await fetch(target.href, {
+                method,
+                headers: requestHeaders,
+                body: requestBody,
+                cache: "no-store",
+                credentials: "same-origin"
+            });
+            const elapsed = Math.round(performance.now() - startedAt);
+            const bytes = method === "HEAD" ? new Uint8Array() : new Uint8Array(await response.arrayBuffer());
+            const contentType = response.headers.get("content-type") || "application/octet-stream";
+            const charsetMatch = /(?:^|;)\s*charset\s*=\s*["']?([^;"'\s]+)/i.exec(contentType);
+            const charset = charsetMatch ? charsetMatch[1] : "utf-8";
+            let text = "";
+            if (method !== "HEAD") {
+                try {
+                    text = new TextDecoder(charset).decode(bytes);
+                } catch (error) {
+                    throw new Error("Không giải mã được response theo charset " + charset + ": " + error.message);
+                }
+            }
+            const responseHeaders = Array.from(response.headers.entries())
+                .map(([name, value]) => name + ": " + value).join("\n");
+            const requestHeaderLines = [
+                method + " " + path + " HTTP/1.1",
+                "Host: " + target.host,
+                "Accept: */*"
+            ];
+            if (method === "POST") {
+                requestHeaderLines.push(
+                    "Content-Type: " + requestHeaders["Content-Type"],
+                    "Content-Length: " + new TextEncoder().encode(requestBody).length);
+            }
+            if (requestHeaders.Authorization) {
+                requestHeaderLines.push("Authorization: Bearer [REDACTED]");
+            }
+
+            statusBadge.textContent = response.status + " " + response.statusText;
+            statusBadge.className = "badge " + (response.ok ? "ok" : "bad");
+            durationLabel.textContent = elapsed + " ms";
+            sizeLabel.textContent = method === "HEAD"
+                ? "Body 0 B · tài nguyên " + formatBytes(
+                    Number(response.headers.get("content-length")) || 0)
+                : formatBytes(bytes.byteLength) + " nhận được · " + contentType;
+            headersPanel.innerHTML = "<pre>HTTP REQUEST\n"
+                + escapeHtml(requestHeaderLines.join("\n") + "\n\nHTTP RESPONSE\n"
+                    + response.status + " " + response.statusText + "\n"
+                    + (responseHeaders || "Server không trả headers.")) + "</pre>";
+            bodyPanel.innerHTML = "<pre>" + escapeHtml(text || (method === "HEAD"
+                ? "HEAD response không có body."
+                : "Response body rỗng.")) + "</pre>";
+            renderPreview(text, contentType, method, bytes, response.headers,
+                response.status + " " + response.statusText);
+
+            latestBlob = method === "HEAD" ? null
+                : new Blob([bytes], { type: contentType });
+            latestFileName = fileNameFromPath(target.pathname);
+            downloadButton.disabled = !latestBlob;
+            recordActivity(method, path, response.status, elapsed, bytes.byteLength);
+        } catch (error) {
+            showError("Không nhận được response: " + error.message
+                + ". Kiểm tra máy chủ, IP, cổng và kết nối mạng.");
+            recordActivity(method, path, "ERR", Math.round(performance.now() - startedAt), 0);
+        } finally {
+            sendButton.disabled = false;
+            sendButton.textContent = "Gửi request ↗";
+        }
+    }
+
+    async function uploadFile() {
+        if (!selectedUploadFiles.length) {
+            uploadStatus.textContent = "Hãy chọn ít nhất một tệp cần gửi trước.";
+            uploadStatus.className = "upload-status bad";
+            uploadInput.focus();
+            return;
+        }
+        const oversized = selectedUploadFiles.find((file) => file.size > 50 * 1024 * 1024);
+        if (oversized) {
+            uploadStatus.textContent = oversized.name + " vượt giới hạn 50 MB.";
+            uploadStatus.className = "upload-status bad";
+            return;
+        }
+        const files = selectedUploadFiles.slice();
+        const method = document.getElementById("upload-method").value;
+        uploadButton.disabled = true;
+        uploadInput.disabled = true;
+        document.getElementById("upload-method").disabled = true;
+        uploadButton.textContent = "Đang gửi…";
+        uploadStatus.className = "upload-status";
+        uploadProgress.hidden = false;
+        uploadProgress.value = 0;
+        const outcomes = [];
+        for (let index = 0; index < files.length; index += 1) {
+            const file = files[index];
+            const requestStartedAt = performance.now();
+            const destination = method === "POST" ? "/__upload"
+                : "/uploads/" + encodeURIComponent(file.name);
+            const requestHeaders = { "Content-Type": file.type || "application/octet-stream" };
+            if (writeTokenInput.value.trim()) {
+                requestHeaders.Authorization = "Bearer " + writeTokenInput.value.trim();
+            }
+            if (method === "POST") {
+                requestHeaders["X-File-Name"] = encodeURIComponent(file.name);
+            }
+            uploadStatus.textContent = "Đang gửi " + (index + 1) + "/" + files.length
+                + " · " + file.name + " · " + formatBytes(file.size) + " qua HTTP/TCP…";
+            try {
+                const response = await fetch(new URL(destination, serverOrigin), {
+                    method,
+                    headers: requestHeaders,
+                    body: file,
+                    cache: "no-store",
+                    credentials: "same-origin"
+                });
+                const message = await response.text();
+                const elapsed = Math.round(performance.now() - requestStartedAt);
+                const state = response.status + " " + response.statusText;
+                outcomes.push({ file, state, ok: response.ok, message });
+                recordActivity(method, destination, response.status, elapsed, file.size, file.name);
+                if (index === files.length - 1) {
+                    statusBadge.textContent = state;
+                    statusBadge.className = "badge " + (response.ok ? "ok" : "bad");
+                    durationLabel.textContent = elapsed + " ms · " + method;
+                    sizeLabel.textContent = formatBytes(file.size) + " uploaded";
+                    headersPanel.innerHTML = "<pre>" + escapeHtml(method + " " + destination + " HTTP/1.1\n"
+                        + "Content-Type: " + requestHeaders["Content-Type"] + "\n"
+                        + (method === "POST" ? "X-File-Name: " + encodeURIComponent(file.name) + "\n" : "")
+                        + "Content-Length: " + file.size + "\n\n"
+                        + response.headers.get("content-type") + "\n"
+                        + "HTTP " + state) + "</pre>";
+                    bodyPanel.innerHTML = "<pre>" + escapeHtml(message) + "</pre>";
+                    previewPanel.innerHTML = "<div class='empty-state'><div><strong>"
+                        + (response.ok ? "Upload hoàn tất" : "Upload không thành công")
+                        + "</strong><span>" + escapeHtml(message) + "</span></div></div>";
+                }
+            } catch (error) {
+                outcomes.push({ file, state: "Lỗi kết nối: " + error.message, ok: false });
+                recordActivity(method, destination, "ERR",
+                    Math.round(performance.now() - requestStartedAt), 0, file.name);
+            }
+            uploadProgress.value = Math.round(((index + 1) / files.length) * 100);
+            renderUploadAttachments(new Map(outcomes.map((outcome) => [outcome.file, outcome])));
+        }
+        const succeeded = outcomes.filter((outcome) => outcome.ok).length;
+        const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+        uploadStatus.textContent = succeeded + "/" + outcomes.length + " tệp được máy chủ nhận · "
+            + formatBytes(totalBytes) + " · /uploads";
+        uploadStatus.className = "upload-status " + (succeeded === outcomes.length ? "ok" : "bad");
+        uploadButton.disabled = false;
+        uploadInput.disabled = false;
+        document.getElementById("upload-method").disabled = false;
+        uploadProgress.hidden = true;
+        uploadProgress.value = 0;
+        uploadButton.textContent = "Gửi lên máy chủ";
+        await refreshFiles();
+        selectPanel("headers");
+    }
+
+    function renderUploadAttachments(outcomes = new Map()) {
+        uploadAttachments.replaceChildren();
+        selectedUploadFiles.forEach((file) => {
+            const row = document.createElement("div");
+            row.className = "upload-attachment";
+            const name = document.createElement("strong");
+            name.textContent = file.name;
+            const metadata = document.createElement("small");
+            const extension = file.name.includes(".") ? file.name.split(".").pop().toUpperCase() : "FILE";
+            metadata.textContent = extension + " · " + (file.type || "application/octet-stream")
+                + " · " + formatBytes(file.size);
+            const state = document.createElement("span");
+            state.className = "attachment-state";
+            const outcome = outcomes.get(file);
+            state.textContent = outcome ? outcome.state : "SẴN SÀNG";
+            if (outcome) {
+                state.classList.add(outcome.ok ? "ok" : "bad");
+                if (outcome.message) state.title = outcome.message;
+            }
+            row.append(name, metadata, state);
+            if (outcome && outcome.ok) {
+                const download = document.createElement("button");
+                download.type = "button";
+                download.className = "attachment-download";
+                download.textContent = "Tải về";
+                download.addEventListener("click", () =>
+                    downloadResource("/uploads/" + encodeURIComponent(file.name), download));
+                row.append(download);
+            }
+            uploadAttachments.append(row);
+        });
+    }
+
+    async function refreshFiles() {
+        fileList.replaceChildren();
+        try {
+            const response = await fetch(new URL("/__files", serverOrigin), {
+                cache: "no-store"
+            });
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            serverState.classList.remove("offline");
+            serverState.innerHTML = "<i></i> MÁY CHỦ SẴN SÀNG";
+            const result = await response.json();
+            if (!result.files.length) {
+                fileList.innerHTML = "<div class='empty-files'>Chưa có tệp trên máy chủ.</div>";
+                return;
+            }
+            result.files.forEach((file) => {
+                const row = document.createElement("div");
+                row.className = "file-entry";
+                const label = document.createElement("span");
+                label.textContent = "▤  " + file.path + " · " + formatBytes(file.size);
+                label.title = file.path;
+                const actions = document.createElement("div");
+                actions.className = "file-actions";
+                const downloadButton = document.createElement("button");
+                downloadButton.type = "button";
+                downloadButton.className = "file-download";
+                downloadButton.textContent = "Tải về";
+                downloadButton.addEventListener("click", () =>
+                    downloadResource(file.path, downloadButton));
+                actions.append(downloadButton);
+                if (file.path.startsWith("/uploads/")) {
+                    const deleteButton = document.createElement("button");
+                    deleteButton.type = "button";
+                    deleteButton.className = "file-delete";
+                    deleteButton.textContent = "Xóa";
+                    deleteButton.title = "Xóa tệp này khỏi server";
+                    deleteButton.addEventListener("click", () => deleteResource(file.path));
+                    actions.append(deleteButton);
+                }
+                row.append(label, actions);
+                fileList.append(row);
+            });
+        } catch (error) {
+            serverState.classList.add("offline");
+            serverState.innerHTML = "<i></i> KHÔNG KẾT NỐI";
+            fileList.textContent = "Không tải được danh sách tệp (" + error.message + ").";
+        }
+    }
+
+    async function downloadResource(path, button) {
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = "Đang tải…";
+        const startedAt = performance.now();
+        try {
+            const response = await fetch(new URL(path, serverOrigin), { cache: "no-store" });
+            const elapsed = Math.round(performance.now() - startedAt);
+            if (!response.ok) {
+                throw new Error("HTTP " + response.status + " " + response.statusText);
+            }
+            const blob = await response.blob();
+            latestBlob = blob;
+            latestFileName = fileNameFromPath(path);
+            downloadButton.disabled = false;
+            downloadResponse();
+            statusBadge.textContent = response.status + " " + response.statusText;
+            statusBadge.className = "badge ok";
+            durationLabel.textContent = elapsed + " ms · GET";
+            sizeLabel.textContent = formatBytes(blob.size) + " · " + (blob.type || "tệp");
+            headersPanel.innerHTML = "<pre>" + escapeHtml("GET " + path + " HTTP/1.1\n"
+                + "Content-Type: " + (blob.type || "application/octet-stream") + "\n"
+                + "Content-Length: " + blob.size + "\nHTTP "
+                + response.status + " " + response.statusText) + "</pre>";
+            bodyPanel.innerHTML = "<pre>" + escapeHtml("Đã tải " + latestFileName
+                + " về thiết bị này.") + "</pre>";
+            previewPanel.innerHTML = "<div class='empty-state'><div><strong>Đã tải tệp về</strong>"
+                + "<span>" + escapeHtml(latestFileName + " · " + formatBytes(blob.size))
+                + "</span></div></div>";
+            recordActivity("GET", path, response.status, elapsed, blob.size);
+            button.textContent = "Đã tải";
+            window.setTimeout(() => { button.textContent = originalText; button.disabled = false; }, 1800);
+        } catch (error) {
+            button.disabled = false;
+            button.textContent = originalText;
+            showError("Không thể tải tệp: " + error.message);
+        }
+    }
+
+    async function deleteResource(path) {
+        if (!path.startsWith("/uploads/")) {
+            showError("Server chỉ cho phép xóa tệp trong /uploads.");
+            return;
+        }
+        if (!window.confirm("Xóa tệp này khỏi máy chủ?\n" + path)) return;
+        const startedAt = performance.now();
+        try {
+            const response = await fetch(new URL(path, serverOrigin), {
+                method: "DELETE",
+                headers: writeTokenInput.value.trim()
+                    ? { Authorization: "Bearer " + writeTokenInput.value.trim() } : {},
+                cache: "no-store"
+            });
+            const message = await response.text();
+            const elapsed = Math.round(performance.now() - startedAt);
+            statusBadge.textContent = response.status + " " + response.statusText;
+            statusBadge.className = "badge " + (response.ok ? "ok" : "bad");
+            durationLabel.textContent = elapsed + " ms · DELETE";
+            sizeLabel.textContent = path;
+            headersPanel.innerHTML = "<pre>" + escapeHtml("DELETE " + path
+                + " HTTP/1.1\\nHTTP " + response.status + " " + response.statusText) + "</pre>";
+            bodyPanel.innerHTML = "<pre>" + escapeHtml(message) + "</pre>";
+            previewPanel.innerHTML = "<div class='empty-state'><div><strong>"
+                + (response.ok ? "Đã xóa tệp" : "Không xóa được tệp")
+                + "</strong><span>" + escapeHtml(message) + "</span></div></div>";
+            recordActivity("DELETE", path, response.status, elapsed, 0);
+            await refreshFiles();
+            selectPanel("headers");
+        } catch (error) {
+            showError("Không thể gửi DELETE đến máy chủ.");
+        }
+    }
+
+    function renderPreview(text, contentType, method, bytes, headers, statusText) {
+        if (previewObjectUrl) {
+            URL.revokeObjectURL(previewObjectUrl);
+            previewObjectUrl = null;
+        }
+        if (method === "HEAD") {
+            const metrics = [
+                ["STATUS", statusText],
+                ["CONTENT-TYPE", headers.get("content-type") || "không có"],
+                ["CONTENT-LENGTH", headers.get("content-length") || "không có"],
+                ["LAST-MODIFIED", headers.get("last-modified") || "không có"],
+                ["SERVER", headers.get("server") || "không có"],
+                ["ETAG", headers.get("etag") || "không có"]
+            ];
+            const summary = document.createElement("div");
+            summary.className = "analysis-grid";
+            summary.innerHTML = metrics.map(([label, value]) =>
+                "<div class='analysis-card'><small>" + escapeHtml(label)
+                + "</small><strong>" + escapeHtml(value) + "</strong></div>"
+            ).join("");
+            previewPanel.replaceChildren(summary);
+            return;
+        }
+        if (contentType.toLowerCase().includes("text/html")) {
+            const parsedHtml = new DOMParser().parseFromString(text, "text/html");
+            const counts = Object.fromEntries(["p", "div", "span", "img"].map((tag) => [
+                tag, parsedHtml.getElementsByTagName(tag).length
+            ]));
+            const summary = document.createElement("div");
+            summary.className = "analysis-grid";
+            const metrics = [
+                ["HTML LENGTH", formatBytes(bytes.byteLength) + " nhận được · "
+                    + text.length + " ký tự UTF-16 sau giải mã"],
+                ["<p> TAGS", counts.p],
+                ["<div> TAGS", counts.div],
+                ["<span> TAGS", counts.span],
+                ["<img> TAGS", counts.img]
+            ];
+            summary.innerHTML = metrics.map(([label, value]) =>
+                "<div class='analysis-card'><small>" + escapeHtml(String(label))
+                + "</small><strong>" + escapeHtml(String(value)) + "</strong></div>"
+            ).join("");
+            const frame = document.createElement("iframe");
+            frame.className = "preview-frame";
+            frame.title = "Nội dung HTML từ HTTP server";
+            frame.setAttribute("sandbox", "allow-forms allow-scripts");
+            frame.srcdoc = text;
+            previewPanel.replaceChildren(summary, frame);
+        } else if (contentType.toLowerCase().startsWith("image/")) {
+            const image = document.createElement("img");
+            image.alt = "Nội dung ảnh nhận từ server";
+            image.style.maxWidth = "100%";
+            image.style.borderRadius = "8px";
+            previewObjectUrl = URL.createObjectURL(new Blob([bytes], { type: contentType }));
+            image.src = previewObjectUrl;
+            previewPanel.replaceChildren(image);
+        } else {
+            previewPanel.innerHTML = "<pre>" + escapeHtml(text || "Tệp không có nội dung văn bản. Dùng Tải nội dung để lưu về máy.") + "</pre>";
+        }
+    }
+
+    function showError(message) {
+        statusBadge.textContent = "REQUEST ERROR";
+        statusBadge.className = "badge bad";
+        durationLabel.textContent = "Không kết nối";
+        sizeLabel.textContent = "—";
+        previewPanel.innerHTML = "<div class='empty-state'><div><strong>Không thể hoàn tất request</strong>"
+            + "<span>" + escapeHtml(message) + "</span></div></div>";
+        headersPanel.innerHTML = "<pre>Không nhận được HTTP response headers.</pre>";
+        bodyPanel.innerHTML = "<pre>" + escapeHtml(message) + "</pre>";
+        latestBlob = null;
+        downloadButton.disabled = true;
+    }
+
+    function renderHistory() {
+        if (!requestHistory.length) {
+            historyList.innerHTML = "<tr><td class='history-empty' colspan='7'>"
+                + "Chưa có giao dịch HTTP trong trình duyệt này.</td></tr>";
+            return;
+        }
+        historyList.innerHTML = requestHistory.map((item, index) => {
+            const canReplay = ["GET", "HEAD"].includes(item.method);
+            const statusClass = Number(item.status) >= 200 && Number(item.status) < 300
+                ? "status-good" : "status-bad";
+            return "<tr><td>" + escapeHtml(item.time || "—") + "</td>"
+                + "<td><code>" + escapeHtml(item.method) + "</code></td>"
+                + "<td title='" + escapeHtml(item.path) + "'>"
+                + (item.fileName ? "<strong>" + escapeHtml(item.fileName) + "</strong><br>" : "")
+                + escapeHtml(item.path) + "</td>"
+                + "<td class='" + statusClass + "'>" + escapeHtml(String(item.status)) + "</td>"
+                + "<td>" + escapeHtml(String(item.elapsed)) + " ms</td>"
+                + "<td>" + escapeHtml(formatBytes(item.bytes || 0)) + "</td>"
+                + "<td><button class='replay-button' type='button' data-history-index='" + index + "'"
+                + (canReplay ? "" : " disabled title='Upload cần chọn lại tệp'")
+                + ">" + (canReplay ? "Gửi lại" : "—") + "</button></td></tr>";
+        }).join("");
+        historyList.querySelectorAll("[data-history-index]").forEach((button) => {
+            button.addEventListener("click", () => {
+                const item = requestHistory[Number(button.dataset.historyIndex)];
+                if (!item) return;
+                methodSelect.value = item.method;
+                pathInput.value = item.path;
+                selectView("request");
+                sendRequest();
+            });
+        });
+    }
+
+    function downloadResponse() {
+        if (!latestBlob) return;
+        const link = document.createElement("a");
+        const objectUrl = URL.createObjectURL(latestBlob);
+        link.href = objectUrl;
+        link.download = latestFileName;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    }
+
+    function fileNameFromPath(path) {
+        const name = path.split("/").filter(Boolean).pop();
+        if (!name) return "index.html";
+        try {
+            return decodeURIComponent(name);
+        } catch (error) {
+            return name;
+        }
+    }
+
+    function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+        return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    }
+
+    function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (character) => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            "\"": "&quot;",
+            "'": "&#39;"
+        })[character]);
+    }
+
+    renderHistory();
+    refreshFiles();
+    selectView("request");
+</script>
+</body>
+</html>

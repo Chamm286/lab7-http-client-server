@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: lab7-http-server
+    runtime: docker
+    plan: free
+    healthCheckPath: /__health
