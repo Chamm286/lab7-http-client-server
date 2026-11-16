@@ -1,0 +1,1080 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTTP Server &amp; Client Dashboard · Lab 7</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #121212;
+    --panel: #1e1e2f;
+    --card: #2d2d3f;
+    --line: #44445a;
+    --ink: #e0e0e0;
+    --muted: #a0a0b8;
+    --red: #ff3b3b;
+    --red-2: #ff6b6b;
+    --blue: #3b82f6;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --shadow: 0 12px 32px rgba(0, 0, 0, .35);
+    --glow: 0 0 18px rgba(255, 59, 59, .45);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+  }
+
+  button, input { font: inherit; }
+
+  .app {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 16px 16px;
+    gap: 10px;
+  }
+
+  .chrome {
+    background: linear-gradient(180deg, #23233a, #1b1b2d);
+    border: 1px solid #3a3a55;
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .titlebar {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    background: #171727;
+    border-bottom: 1px solid #2a2a42;
+  }
+
+  .window-dots {
+    display: flex;
+    gap: 6px;
+  }
+
+  .window-dots span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ff5f57;
+  }
+
+  .window-dots span:nth-child(2) { background: #febc2e; }
+  .window-dots span:nth-child(3) { background: #28c840; }
+
+  .titlebar-title {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .toolbar {
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px;
+    background: #1f1f33;
+  }
+
+  .logo {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    background: linear-gradient(135deg, var(--red), var(--red-2));
+    color: #fff;
+    font-weight: 900;
+    font-size: 13px;
+    box-shadow: 0 6px 16px rgba(255, 59, 59, .35);
+  }
+
+  .brand {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .brand h1 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.1;
+  }
+
+  .brand p {
+    margin: 1px 0 0;
+    color: var(--muted);
+    font-size: 9.5px;
+    font-weight: 600;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 10px;
+    background: #25253d;
+    border: 1px solid #3a3a55;
+  }
+
+  .tab-btn {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: .16s ease;
+  }
+
+  .tab-btn:hover { color: #fff; background: #30304d; }
+  .tab-btn.active { color: #fff; background: linear-gradient(135deg, #ff3b3b, #ff6b6b); }
+
+  .spacer { flex: 1; }
+
+  .live-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(34, 197, 94, .14);
+    color: #86efac;
+    font-size: 10px;
+    font-weight: 800;
+    border: 1px solid rgba(34, 197, 94, .35);
+    white-space: nowrap;
+  }
+
+  .live-pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, .16);
+  }
+
+  .address-wrap {
+    padding: 0 12px 12px;
+    background: #1f1f33;
+  }
+
+  .nav-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    border: 1px solid #3a3a55;
+    background: #25253d;
+    color: #cbd5e1;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 700;
+    transition: .16s ease;
+  }
+
+  .icon-btn:hover:not(:disabled) {
+    border-color: #ff6b6b;
+    background: #30304d;
+    color: #fff;
+    box-shadow: 0 0 12px rgba(255, 59, 59, .25);
+  }
+  .icon-btn:disabled { opacity: .38; cursor: default; }
+
+  .url-box {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: #25253d;
+    border: 1px solid #3a3a55;
+    transition: .16s ease;
+  }
+
+  .url-box:focus-within {
+    background: #2b2b45;
+    border-color: #ff6b6b;
+    box-shadow: 0 0 0 3px rgba(255, 59, 59, .14);
+  }
+
+  .url-box .lock { color: #94a3b8; font-size: 13px; }
+
+  #urlInput {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #f1f5f9;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  #urlInput::placeholder { color: #7c7c9a; font-weight: 500; }
+
+  .go-btn {
+    height: 36px;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 999px;
+    color: #fff;
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: .4px;
+    cursor: pointer;
+    background: linear-gradient(135deg, #ff3b3b, #ff6b6b);
+    box-shadow: 0 8px 18px rgba(255, 59, 59, .30);
+    transition: .16s ease;
+  }
+
+  .go-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgba(255, 59, 59, .42);
+  }
+  .go-btn:disabled { opacity: .55; cursor: wait; }
+
+  .shell {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+  .panel[hidden] { display: none !important; }
+
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .metric-card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: var(--shadow);
+    min-width: 0;
+  }
+
+  .metric-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 8px;
+  }
+
+  .metric-icon {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-size: 17px;
+    font-weight: 900;
+  }
+
+  .metric-icon.time { background: rgba(59, 130, 246, .18); color: #60a5fa; }
+  .metric-icon.ip { background: rgba(168, 85, 247, .18); color: #c084fc; }
+  .metric-icon.port { background: rgba(34, 197, 94, .18); color: #4ade80; }
+  .metric-icon.status { background: rgba(245, 158, 11, .18); color: #fbbf24; }
+
+  .metric-label {
+    color: var(--muted);
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: .9px;
+  }
+
+  .metric-value {
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--ink);
+    line-height: 1.1;
+    word-break: break-word;
+  }
+
+  .metric-value.good { color: #4ade80; }
+  .metric-value.warn { color: #fbbf24; }
+  .metric-value.bad { color: #f87171; }
+  .metric-value.neutral { color: #a0a0b8; }
+
+  .ip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+    max-height: 70px;
+    overflow: auto;
+    padding-right: 2px;
+  }
+
+  .ip-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: #30304d;
+    border: 1px solid #4a4a6a;
+    color: #e0e0e0;
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    min-height: 22px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: #25253d;
+    border: 1px solid #3a3a55;
+    color: #a0a0b8;
+    font-family: Consolas, monospace;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .badge b { color: var(--ink); }
+  .meta-title { color: var(--ink); font-size: 12px; font-weight: 700; }
+  .meta-note { margin-left: auto; color: #a0a0b8; font-size: 11px; white-space: nowrap; }
+
+  .browser-stage {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+    background: #181828;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+  }
+
+  #frame {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #fff;
+    display: block;
+  }
+
+  .empty-state {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 32px;
+    text-align: center;
+    color: #a0a0b8;
+    background: #181828;
+  }
+
+  .empty-state[hidden] { display: none !important; }
+  .empty-state .inner { max-width: 440px; }
+  .empty-state .big {
+    width: 62px;
+    height: 62px;
+    margin: 0 auto 16px;
+    display: grid;
+    place-items: center;
+    border-radius: 18px;
+    background: #25253d;
+    border: 1px solid #3a3a55;
+    color: #ff6b6b;
+    font-size: 28px;
+  }
+  .empty-state h3 { margin: 0 0 7px; color: var(--ink); font-size: 17px; }
+  .empty-state p { margin: 0; line-height: 1.65; font-size: 12.5px; }
+  .empty-state code {
+    background: #25253d;
+    border: 1px solid #3a3a55;
+    border-radius: 6px;
+    padding: 2px 6px;
+    color: #ff6b6b;
+  }
+
+  .history-card {
+    flex: 1;
+    min-height: 0;
+    padding: 16px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .history-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .history-head h2 { margin: 0; font-size: 16px; color: var(--ink); }
+  .history-head p { margin: 3px 0 0; color: var(--muted); font-size: 11.5px; }
+  .history-head .spacer { flex: 1; }
+
+  .refresh-btn {
+    border: 1px solid #3a3a55;
+    background: #25253d;
+    color: #e0e0e0;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: .16s ease;
+  }
+
+  .refresh-btn:hover { background: #30304d; border-color: #ff6b6b; color: #fff; }
+
+  .table-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: #23233a;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+  }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    text-align: left;
+    padding: 11px 13px;
+    color: #fff;
+    font-size: 9.5px;
+    font-weight: 900;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+    background: #2a2a42;
+    border-bottom: 1px solid #3a3a55;
+  }
+
+  tbody td {
+    padding: 11px 13px;
+    border-bottom: 1px solid #2f2f4a;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 340px;
+  }
+
+  tbody tr:nth-child(even) { background: #25253d; }
+  tbody tr:hover { background: #30304d; }
+  tbody tr:last-child td { border-bottom: 0; }
+
+  td.mono { font-family: Consolas, monospace; font-size: 11.5px; }
+  td.url-cell { max-width: 420px; }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 46px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-family: Consolas, monospace;
+    font-size: 10.5px;
+    font-weight: 800;
+    background: #30304d;
+    color: #cbd5e1;
+  }
+
+  .status-badge.good { background: rgba(34, 197, 94, .18); color: #4ade80; }
+  .status-badge.info { background: rgba(59, 130, 246, .18); color: #60a5fa; }
+  .status-badge.warn { background: rgba(245, 158, 11, .18); color: #fbbf24; }
+  .status-badge.bad { background: rgba(239, 68, 68, .18); color: #f87171; }
+
+  .table-empty {
+    padding: 42px 20px;
+    text-align: center;
+    color: #a0a0b8;
+    font-size: 12.5px;
+  }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translate(-50%, 20px);
+    max-width: min(680px, 90vw);
+    padding: 11px 16px;
+    border-radius: 12px;
+    background: #111827;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, .35);
+    opacity: 0;
+    pointer-events: none;
+    transition: .22s ease;
+    z-index: 50;
+    border: 1px solid #374151;
+  }
+
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-width: 760px) {
+    .app { padding: 10px; }
+    .brand p { display: none; }
+    .live-pill { display: none; }
+    .metrics { grid-template-columns: 1fr 1fr; }
+    .tab-btn { padding: 8px 10px; }
+    .go-btn { padding: 0 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="chrome">
+    <div class="titlebar">
+      <div class="window-dots"><span></span><span></span><span></span></div>
+      <div class="titlebar-title">HTTP Server &amp; Client Dashboard · Lab 7</div>
+    </div>
+
+    <div class="toolbar">
+      <div class="logo">L7</div>
+      <div class="brand">
+        <h1>HTTP Server &amp; Client Dashboard</h1>
+        <p>Raw Socket · MySQL · Enterprise Dashboard</p>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab-btn active" id="browserTab" type="button">Browser</button>
+        <button class="tab-btn" id="historyTab" type="button">History</button>
+      </div>
+
+      <div class="live-pill"><span class="dot"></span><span id="serverState">localhost</span></div>
+    </div>
+
+    <div class="address-wrap">
+      <div class="nav-row">
+        <button class="icon-btn" id="backBtn" type="button" title="Quay lại" disabled>&#8249;</button>
+        <button class="icon-btn" id="forwardBtn" type="button" title="Tiến tới" disabled>&#8250;</button>
+        <button class="icon-btn" id="reloadBtn" type="button" title="Tải lại" disabled>&#8635;</button>
+        <div class="url-box">
+          <span class="lock">&#128274;</span>
+          <input id="urlInput" type="text" spellcheck="false"
+                 placeholder="Nhập URL, ví dụ: https://example.com">
+        </div>
+        <button class="go-btn" id="goBtn" type="button">GO</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="shell">
+    <section class="panel" id="browserPanel">
+      <div class="metrics" aria-label="Thông số request">
+        <div class="metric-card stat time">
+          <div class="metric-head">
+            <div class="metric-icon time">&#9201;</div>
+            <div class="metric-label">TIME</div>
+          </div>
+          <div class="metric-value" id="statTime">--:--:--</div>
+        </div>
+
+        <div class="metric-card stat ip">
+          <div class="metric-head">
+            <div class="metric-icon ip">&#127760;</div>
+            <div class="metric-label">IP</div>
+          </div>
+          <div class="metric-value" id="statIp">—</div>
+          <div class="ip-list" id="ipList"></div>
+        </div>
+
+        <div class="metric-card stat port">
+          <div class="metric-head">
+            <div class="metric-icon port">&#128268;</div>
+            <div class="metric-label">PORT</div>
+          </div>
+          <div class="metric-value" id="statPort">—</div>
+        </div>
+
+        <div class="metric-card stat status">
+          <div class="metric-head">
+            <div class="metric-icon status">&#9989;</div>
+            <div class="metric-label">STATUS</div>
+          </div>
+          <div class="metric-value neutral" id="statStatus">—</div>
+        </div>
+      </div>
+
+      <div class="meta-row">
+        <div class="meta-title" id="pageTitle">Chưa tải trang nào</div>
+        <div class="badge">p <b id="chipP">0</b></div>
+        <div class="badge">div <b id="chipDiv">0</b></div>
+        <div class="badge">span <b id="chipSpan">0</b></div>
+        <div class="badge">img <b id="chipImg">0</b></div>
+        <div class="badge">a <b id="chipA">0</b></div>
+        <div class="badge"><b id="chipBytes">0 B</b></div>
+        <div class="badge"><b id="chipMs">0 ms</b></div>
+        <div class="meta-note" id="metaNote">Sẵn sàng</div>
+      </div>
+
+      <div class="browser-stage">
+        <iframe id="frame" title="Nội dung trang web"
+                sandbox="allow-scripts allow-forms allow-same-origin allow-popups"></iframe>
+        <div class="empty-state" id="emptyState">
+          <div class="inner">
+            <div class="big">&#9675;</div>
+            <h3>Bắt đầu duyệt web</h3>
+            <p>Nhập URL và bấm <b>GO</b>. Server sẽ tải trang bằng raw socket,
+            phân tích IP/Port rồi trả JSON về đây.</p>
+            <p style="margin-top:10px">Gợi ý:
+              <code id="hintUrl">http://localhost:8080/gioi-thieu</code>
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="historyPanel" hidden>
+      <div class="history-card">
+        <div class="history-head">
+          <div>
+            <h2>Lịch sử duyệt web</h2>
+            <p>Đọc trực tiếp từ bảng <b>web_history</b> trong MySQL · tối đa 100 dòng</p>
+          </div>
+          <div class="spacer"></div>
+          <button class="refresh-btn" id="refreshHistory" type="button">&#8635; Làm mới</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:76px">Time</th>
+                <th>URL</th>
+                <th style="width:170px">IP</th>
+                <th style="width:62px">Port</th>
+                <th style="width:78px">Status</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <tr><td colspan="5" class="table-empty">Chưa tải lịch sử.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+
+  const els = {
+    frame: $("frame"),
+    empty: $("emptyState"),
+    url: $("urlInput"),
+    go: $("goBtn"),
+    back: $("backBtn"),
+    forward: $("forwardBtn"),
+    reload: $("reloadBtn"),
+    browserTab: $("browserTab"),
+    historyTab: $("historyTab"),
+    browserPanel: $("browserPanel"),
+    historyPanel: $("historyPanel"),
+    historyBody: $("historyBody"),
+    refreshHistory: $("refreshHistory"),
+    statTime: $("statTime"),
+    statIp: $("statIp"),
+    statPort: $("statPort"),
+    statStatus: $("statStatus"),
+    ipList: $("ipList"),
+    pageTitle: $("pageTitle"),
+    chipP: $("chipP"),
+    chipDiv: $("chipDiv"),
+    chipSpan: $("chipSpan"),
+    chipImg: $("chipImg"),
+    chipA: $("chipA"),
+    chipBytes: $("chipBytes"),
+    chipMs: $("chipMs"),
+    metaNote: $("metaNote"),
+    toast: $("toast"),
+    hintUrl: $("hintUrl"),
+    serverState: $("serverState")
+  };
+
+  const state = {
+    stack: [],
+    index: -1,
+    loading: false,
+    activeTab: "browser"
+  };
+
+  function toast(message) {
+    els.toast.textContent = message;
+    els.toast.classList.add("show");
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => els.toast.classList.remove("show"), 3200);
+  }
+
+  function esc(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function formatBytes(bytes) {
+    const n = Number(bytes) || 0;
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    return (n / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  function parseIps(value) {
+    if (value == null || value === "") return [];
+    return String(value)
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function renderIpList(value) {
+    const ips = parseIps(value);
+    if (ips.length === 0) {
+      els.ipList.innerHTML = "";
+      return;
+    }
+    els.ipList.innerHTML = ips.map((ip) => '<span class="ip-chip">' + esc(ip) + '</span>').join("");
+  }
+
+  function normalizeUrl(raw) {
+    let value = String(raw || "").trim();
+    if (!value) return "";
+    if (value.startsWith("/")) return window.location.origin + value;
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) value = "http://" + value;
+    return value;
+  }
+
+  function setTab(tab) {
+    state.activeTab = tab;
+    const browser = tab === "browser";
+    els.browserTab.classList.toggle("active", browser);
+    els.historyTab.classList.toggle("active", !browser);
+    els.browserPanel.hidden = !browser;
+    els.historyPanel.hidden = browser;
+    if (!browser) loadHistory();
+  }
+
+  function setLoading(loading) {
+    state.loading = loading;
+    els.go.disabled = loading;
+    els.go.textContent = loading ? "WAIT" : "GO";
+    els.reload.disabled = loading || state.index < 0;
+    updateNav();
+  }
+
+  function updateNav() {
+    els.back.disabled = state.loading || state.index <= 0;
+    els.forward.disabled = state.loading || state.index < 0 || state.index >= state.stack.length - 1;
+    els.reload.disabled = state.loading || state.index < 0;
+  }
+
+  function statusClass(status) {
+    const code = Number(status) || 0;
+    if (code >= 200 && code < 300) return "good";
+    if (code >= 300 && code < 400) return "info";
+    if (code >= 400 && code < 500) return "warn";
+    if (code >= 500) return "bad";
+    return "neutral";
+  }
+
+  function statusCodeOf(data) {
+    const direct = Number(data && data.statusCode);
+    if (Number.isFinite(direct) && direct > 0) return direct;
+    const match = String((data && (data.statusText || data.status)) || "").match(/^(\d{3})/);
+    return match ? Number(match[1]) : 0;
+  }
+
+  function showStatus(status, text) {
+    const code = Number(status) || 0;
+    els.statStatus.textContent = text || (code > 0 ? String(code) : (code === 0 ? "ERR" : "—"));
+    els.statStatus.className = "value " + statusClass(code);
+  }
+
+  function updateStats(data) {
+    els.statTime.textContent = data.time || "--:--:--";
+    const ips = parseIps(data.ip);
+    els.statIp.textContent = ips.length > 0 ? ips[0] : "—";
+    els.statIp.title = ips.join(", ");
+    renderIpList(data.ip);
+    els.statPort.textContent = data.port ? String(data.port) : "—";
+    showStatus(statusCodeOf(data), data.statusText || data.status);
+
+    const analysis = data.analysis || {};
+    els.chipP.textContent = analysis.p || 0;
+    els.chipDiv.textContent = analysis.div || 0;
+    els.chipSpan.textContent = analysis.span || 0;
+    els.chipImg.textContent = analysis.img || 0;
+    els.chipA.textContent = analysis.a || 0;
+    els.chipBytes.textContent = formatBytes(data.bytes || 0);
+    els.chipMs.textContent = (data.elapsedMs || 0) + " ms";
+    els.pageTitle.textContent = data.title || data.finalUrl || "Không có tiêu đề";
+    els.pageTitle.title = data.title || data.finalUrl || "";
+    els.metaNote.textContent = data.contentType || "";
+  }
+
+  function showEmpty(message) {
+    els.empty.hidden = false;
+    if (message) {
+      els.empty.querySelector("h3").textContent = "Không hiển thị được trang";
+      els.empty.querySelector("p").textContent = message;
+    }
+    els.frame.srcdoc = "";
+  }
+
+  function showFrame(html) {
+    els.empty.hidden = true;
+    els.frame.srcdoc = html;
+  }
+
+  function errorHtml(message, detail) {
+    return '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+      '<style>body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#111827;' +
+      'color:#f3f4f6}.wrap{max-width:680px;margin:48px auto;padding:0 24px}' +
+      '.card{background:#1f2937;border:1px solid #374151;border-radius:16px;padding:28px;' +
+      'box-shadow:0 16px 40px rgba(0,0,0,.25)}h2{margin:0 0 10px;font-size:21px;color:#f87171}' +
+      'pre{white-space:pre-wrap;word-break:break-word;background:#111827;border:1px solid #374151;' +
+      'border-radius:10px;padding:14px;color:#fca5a5;font-family:Consolas,monospace;font-size:12px}' +
+      '</style></head><body><div class="wrap"><div class="card"><h2>' + esc(message) +
+      '</h2><pre>' + esc(detail) + '</pre></div></div></body></html>';
+  }
+
+  async function navigate(rawUrl, push) {
+    const url = normalizeUrl(rawUrl);
+    if (!url || state.loading) return;
+
+    if (push !== false) {
+      while (state.stack.length > state.index + 1) state.stack.pop();
+      if (state.index < 0 || state.stack[state.index] !== url) {
+        state.stack.push(url);
+        state.index = state.stack.length - 1;
+      }
+    }
+    els.url.value = url;
+    setLoading(true);
+    els.metaNote.textContent = "Đang tải " + url + " …";
+    updateNav();
+
+    try {
+      const response = await fetch("/proxy?url=" + encodeURIComponent(url), {
+        headers: { "Accept": "application/json" }
+      });
+      const data = await response.json();
+
+      if (!data.ok) {
+        updateStats(data);
+        els.pageTitle.textContent = "Lỗi tải trang";
+        showFrame(errorHtml("Không tải được URL", (data.message || "Lỗi không xác định") +
+          "\n\n" + (data.requestedUrl || url)));
+        els.metaNote.textContent = "Network error";
+        toast(data.message || "Không tải được URL");
+        return;
+      }
+
+      updateStats(data);
+      els.url.value = data.finalUrl || url;
+      if (state.index >= 0 && state.stack[state.index] === url) {
+        state.stack[state.index] = data.finalUrl || url;
+      }
+
+      if (data.isHtml && data.html) {
+        showFrame(data.html);
+      } else {
+        showFrame(errorHtml("Nội dung không phải HTML",
+          (data.message || "Server trả về Content-Type: " + (data.contentType || "không rõ")) +
+          "\n\nHTTP " + (data.statusText || data.status || "") +
+          "\n" + (data.bytes || 0) + " byte · " + (data.elapsedMs || 0) + " ms"));
+      }
+
+      els.metaNote.textContent = data.historySaved
+        ? "Đã lưu lịch sử MySQL"
+        : (data.historyError ? "Không lưu được lịch sử" : "Hoàn tất");
+      if (data.finalUrl) document.title = (data.title ? data.title + " · " : "") + "Lab 7 Web Client";
+
+      await loadHistory();
+    } catch (error) {
+      els.statTime.textContent = new Date().toLocaleTimeString("vi-VN", { hour12: false });
+      els.statIp.textContent = "—";
+      els.statPort.textContent = "—";
+      showStatus(0, "ERR");
+      els.pageTitle.textContent = "Lỗi kết nối";
+      els.metaNote.textContent = "Không gọi được /proxy";
+      showFrame(errorHtml("Không gọi được server", String(error && error.message ? error.message : error)));
+      toast("Không kết nối được server localhost.");
+    } finally {
+      setLoading(false);
+      updateNav();
+    }
+  }
+
+  function goBack() {
+    if (state.index > 0) {
+      state.index -= 1;
+      updateNav();
+      navigate(state.stack[state.index], false);
+    }
+  }
+
+  function goForward() {
+    if (state.index >= 0 && state.index < state.stack.length - 1) {
+      state.index += 1;
+      updateNav();
+      navigate(state.stack[state.index], false);
+    }
+  }
+
+  function reloadPage() {
+    if (state.index >= 0) navigate(state.stack[state.index], false);
+  }
+
+  async function loadHistory() {
+    els.historyBody.innerHTML = '<tr><td colspan="5" class="table-empty">Đang tải lịch sử…</td></tr>';
+    try {
+      const response = await fetch("/api/history", { headers: { "Accept": "application/json" } });
+      const data = await response.json();
+      if (!data.ok) {
+        els.historyBody.innerHTML = '<tr><td colspan="5" class="table-empty">' +
+          esc(data.error || "Không đọc được lịch sử.") + '</td></tr>';
+        return;
+      }
+      if (!data.history || data.history.length === 0) {
+        els.historyBody.innerHTML = '<tr><td colspan="5" class="table-empty">' +
+          'Chưa có lịch sử. Hãy duyệt một trang trước.</td></tr>';
+        return;
+      }
+      els.historyBody.innerHTML = data.history.map((row) => {
+        const cls = statusClass(row.status);
+        return '<tr data-url="' + esc(row.url) + '">' +
+          '<td class="mono">' + esc(row.time || "") + '</td>' +
+          '<td class="url-cell" title="' + esc(row.finalUrl || row.url) + '">' +
+            esc(row.finalUrl || row.url) + '</td>' +
+          '<td class="mono">' + esc(row.ip || "—") + '</td>' +
+          '<td class="mono">' + esc(row.port || "—") + '</td>' +
+          '<td><span class="status-badge ' + cls + '">' + esc(row.statusText || row.status) + '</span></td>' +
+          '</tr>';
+      }).join("");
+    } catch (error) {
+      els.historyBody.innerHTML = '<tr><td colspan="5" class="table-empty">' +
+        esc("Không kết nối được /api/history: " + (error && error.message ? error.message : error)) +
+        '</td></tr>';
+    }
+  }
+
+  els.go.addEventListener("click", () => navigate(els.url.value, true));
+  els.url.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") navigate(els.url.value, true);
+  });
+  els.back.addEventListener("click", goBack);
+  els.forward.addEventListener("click", goForward);
+  els.reload.addEventListener("click", reloadPage);
+  els.browserTab.addEventListener("click", () => setTab("browser"));
+  els.historyTab.addEventListener("click", () => setTab("history"));
+  els.refreshHistory.addEventListener("click", loadHistory);
+
+  els.historyBody.addEventListener("click", (event) => {
+    const row = event.target.closest("tr[data-url]");
+    if (!row) return;
+    setTab("browser");
+    navigate(row.getAttribute("data-url"), true);
+  });
+
+  window.addEventListener("message", (event) => {
+    const data = event.data;
+    if (!data || data.type !== "lab7:navigate" || typeof data.url !== "string") return;
+    if (event.source !== els.frame.contentWindow) return;
+    if (!/^https?:\/\//i.test(data.url)) return;
+    if (state.loading) return;
+    navigate(data.url, true);
+  });
+
+  window.addEventListener("error", (event) => {
+    if (event && event.message) toast(event.message);
+  });
+
+  const origin = window.location.origin && window.location.origin !== "null"
+    ? window.location.origin : "http://localhost:8080";
+  els.hintUrl.textContent = origin + "/gioi-thieu";
+  els.serverState.textContent = location.host || "localhost:8080";
+  els.url.value = origin + "/gioi-thieu";
+
+  if (location.protocol === "http:" || location.protocol === "https:") {
+    navigate(els.url.value, true);
+    if (new URLSearchParams(location.search).get("tab") === "history") {
+      setTimeout(() => setTab("history"), 900);
+    }
+  } else {
+    showEmpty("Hãy chạy server rồi mở http://localhost:8080/ để dùng Web Client.");
+  }
+})();
+</script>
+</body>
+</html>
